@@ -1,0 +1,38 @@
+{
+  "id": "blast-latency+catalog-kill",
+  "scenario": "node-network-chaos+pod-scenarios",
+  "aborted": false,
+  "abort_reason": null,
+  "first_bad_probe_to_abort_s": null,
+  "abort_to_stopped_s": null,
+  "duration_s": 150.0,
+  "started_at": 1791664605.5,
+  "ended_at": 1791664755.5,
+  "baseline_p95_ms": 5,
+  "impact": {
+    "probes": 150,
+    "failed": 0,
+    "p95_ms": 207,
+    "max_ms": 608
+  },
+  "recovery_s": 0.0,
+  "krkn_exit": 0,
+  "krkn_failed": false,
+  "krkn": {
+    "total_recovery_time": 2.4414122104644775,
+    "pod_readiness_time": 2.3948750495910645,
+    "pod_rescheduling_time": 0.046537160873413086
+  },
+  "parts": {
+    "blast-latency": {
+      "scenario": "node-network-chaos",
+      "krkn_exit": 0,
+      "krkn_failed": false
+    },
+    "catalog-kill": {
+      "scenario": "pod-scenarios",
+      "krkn_exit": 0,
+      "krkn_failed": false
+    }
+  }
+}

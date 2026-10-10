@@ -1,0 +1,80 @@
+{
+  "tier": "medium",
+  "effects": [
+    {
+      "kind": "latency",
+      "service": "agent",
+      "what": "agent p95 388 -> 930 ms"
+    },
+    {
+      "kind": "latency",
+      "service": "checkout",
+      "what": "checkout p95 48 -> 1670 ms"
+    },
+    {
+      "kind": "latency",
+      "service": "email",
+      "what": "email p95 5 -> 372 ms"
+    },
+    {
+      "kind": "latency",
+      "service": "frontend",
+      "what": "frontend p95 34 -> 979 ms"
+    },
+    {
+      "kind": "latency",
+      "service": "frontend-proxy",
+      "what": "frontend-proxy p95 31 -> 1117 ms"
+    },
+    {
+      "kind": "latency",
+      "service": "product-catalog",
+      "what": "product-catalog p95 34 -> 738 ms"
+    },
+    {
+      "kind": "latency",
+      "service": "shipping",
+      "what": "shipping p95 4 -> 386 ms"
+    }
+  ],
+  "fault": "+200 ms on everything leaving the backend node + product catalog pod killed",
+  "scenario": "node-network-chaos+pod-scenarios",
+  "params": {
+    "blast-latency": {
+      "node-name": "chaos-worker",
+      "latency": "200ms",
+      "loss": "0",
+      "bandwidth": "10gbit",
+      "test-duration": 120
+    },
+    "catalog-kill": {
+      "namespace": "^otel-demo$",
+      "pod-label": "opentelemetry.io/name=product-catalog",
+      "disruption-count": 1,
+      "expected-recovery-time": 120
+    }
+  },
+  "recovery_s": 0.0,
+  "shop": {
+    "probes": 150,
+    "failed": 0,
+    "p95_ms": 207,
+    "max_ms": 608
+  },
+  "baseline_p95_ms": 5,
+  "measured_at": "2026-10-10T20:40:20+00:00",
+  "windows": {
+    "baseline": [
+      1791664301,
+      1791664601
+    ],
+    "fault": [
+      1791664606,
+      1791664816
+    ]
+  },
+  "fault_ended_at": 1791664755.5,
+  "recovered_s": 150,
+  "recovery_checked_s": 155,
+  "recovery_live": true
+}
