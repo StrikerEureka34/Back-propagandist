@@ -41,25 +41,44 @@ def build(jaeger_deps: list[dict], workloads: dict) -> dict:
     for name in sorted(set(pods) | {n for pair in edges for n in pair}):
         spec = pods.get(name)
         callers = sorted(src for src, dst in edges if dst == name)
-        flags = []
-        store = persistent = None
+        replicas = store = persistent = None
         if spec:
             pod = spec["template"]["spec"]
             ports = {p["containerPort"] for c in pod["containers"] for p in c.get("ports", [])}
             store = next((DATA_PORTS[p] for p in sorted(ports) if p in DATA_PORTS), None)
             persistent = bool(spec.get("volumeClaimTemplates")) or any(
                 "persistentVolumeClaim" in v for v in pod.get("volumes", []))
-            if spec.get("replicas", 1) == 1:
-                flags.append("single-replica")
-            if store and not persistent:
-                flags.append("no-persistence")
-        if len(callers) >= HUB_CALLERS:
-            flags.append("hub")
-        nodes[name] = {"replicas": spec.get("replicas", 1) if spec else None, "store": store,
-                       "persistent": persistent, "callers": callers, "flags": flags}
+            replicas = spec.get("replicas", 1)
+        nodes[name] = {"replicas": replicas, "store": store, "persistent": persistent,
+                       "callers": callers, "flags": _flags(replicas, store, persistent, callers)}
 
     return {"nodes": nodes,
             "edges": [{"from": s, "to": d, **e} for (s, d), e in sorted(edges.items())]}
+
+
+def _flags(replicas, store, persistent, callers) -> list[str]:
+    flags = []
+    if replicas == 1:
+        flags.append("single-replica")
+    if store and not persistent:
+        flags.append("no-persistence")
+    if len(callers) >= HUB_CALLERS:
+        flags.append("hub")
+    return flags
+
+
+def prune(graph: dict, names: set[str] = MONITORING) -> dict:
+    """Drop `names` from an already-built graph (e.g. one recorded on the cluster) and
+    recompute callers and flags, so the result matches what build() would give."""
+    edges = [e for e in graph["edges"] if not {e["from"], e["to"]} & names]
+    nodes = {}
+    for name, n in graph["nodes"].items():
+        if name in names:
+            continue
+        callers = sorted({e["from"] for e in edges if e["to"] == name})
+        nodes[name] = {**n, "callers": callers,
+                       "flags": _flags(n["replicas"], n["store"], n["persistent"], callers)}
+    return {"nodes": nodes, "edges": edges}
 
 
 def coverage(graph: dict, documented: list[list[str]]) -> dict:

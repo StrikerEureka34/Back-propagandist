@@ -63,6 +63,18 @@ def test_monitoring_stack_is_not_on_the_map():
     assert not any({e["from"], e["to"]} & depmap.MONITORING for e in g["edges"])
 
 
+def test_prune_recomputes_callers_and_flags():
+    # a graph recorded before the monitoring exclusion: opamp-server is a "hub" via 3 callers
+    g = {"nodes": {n: {"replicas": 1, "store": None, "persistent": False, "callers": [], "flags": []}
+                   for n in ["a", "b", "c", "opamp-server"]},
+         "edges": [{"from": x, "to": "opamp-server", "calls": None, "source": "env"} for x in "abc"]
+                  + [{"from": "a", "to": "b", "calls": 5, "source": "jaeger"}]}
+    p = depmap.prune(g)
+    assert "opamp-server" not in p["nodes"]
+    assert p["edges"] == [{"from": "a", "to": "b", "calls": 5, "source": "jaeger"}]
+    assert p["nodes"]["b"]["callers"] == ["a"] and p["nodes"]["b"]["flags"] == ["single-replica"]
+
+
 def test_coverage_against_official_diagram():
     documented = json.loads((Path(__file__).parent.parent / "docs" / "official_edges.json")
                             .read_text())["edges"]
