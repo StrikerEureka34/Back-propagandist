@@ -54,7 +54,7 @@
       {
         "kind": "cpu",
         "service": "ad",
-        "what": "ad CPU 0.00 -> 2.52 cores"
+        "what": "ad CPU 0.00 -> 2.96 cores"
       }
     ],
     "fault": "control: high CPU in the ad service",
@@ -68,28 +68,29 @@
     "shop": {
       "probes": 120,
       "failed": 0,
-      "p95_ms": 7,
-      "max_ms": 19
+      "p95_ms": 6,
+      "max_ms": 13
     },
-    "baseline_p95_ms": 6,
-    "measured_at": "2026-10-10T16:53:33+00:00",
+    "baseline_p95_ms": 4,
+    "measured_at": "2026-10-10T20:49:46+00:00",
     "windows": {
       "baseline": [
-        1791650534,
-        1791650834
+        1791664897,
+        1791665197
       ],
       "fault": [
-        1791651029,
-        1791651209
+        1791665201,
+        1791665381
       ]
     },
+    "fault_ended_at": 1791665321.2,
+    "recovered_s": 150,
+    "recovery_checked_s": 155,
+    "recovery_live": true,
     "control": {
       "expected": "low",
       "pass": true
-    },
-    "fault_ended_at": 1791651148.6,
-    "recovered_s": 150,
-    "recovery_checked_s": 900
+    }
   },
   "catalog-kill": {
     "tier": "low",
