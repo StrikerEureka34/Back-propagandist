@@ -1,0 +1,67 @@
+{
+  "control-payment-failure": {
+    "tier": "high",
+    "effects": [
+      {
+        "kind": "errors",
+        "service": "checkout",
+        "what": "checkout errors 0% -> 93% (14/15 calls)"
+      },
+      {
+        "kind": "errors",
+        "service": "payment",
+        "what": "payment errors 0% -> 87% (13/15 calls)"
+      }
+    ],
+    "fault": "control: every charge fails",
+    "scenario": "flagd",
+    "params": {
+      "flag": "paymentFailure",
+      "variant": "100%",
+      "duration": 120
+    },
+    "recovery_s": 0.0,
+    "shop": {
+      "probes": 120,
+      "failed": 0,
+      "p95_ms": 7,
+      "max_ms": 8
+    },
+    "baseline_p95_ms": 5,
+    "measured_at": "2026-10-10T15:45:18+00:00",
+    "control": {
+      "expected": "high",
+      "pass": true
+    }
+  },
+  "control-ad-cpu": {
+    "tier": "low",
+    "effects": [
+      {
+        "kind": "cpu",
+        "service": "ad",
+        "what": "ad CPU 0.00 -> 3.79 cores"
+      }
+    ],
+    "fault": "control: high CPU in the ad service",
+    "scenario": "flagd",
+    "params": {
+      "flag": "adHighCpu",
+      "variant": "on",
+      "duration": 120
+    },
+    "recovery_s": 0.0,
+    "shop": {
+      "probes": 120,
+      "failed": 0,
+      "p95_ms": 7,
+      "max_ms": 17
+    },
+    "baseline_p95_ms": 5,
+    "measured_at": "2026-10-10T15:48:23+00:00",
+    "control": {
+      "expected": "low",
+      "pass": true
+    }
+  }
+}

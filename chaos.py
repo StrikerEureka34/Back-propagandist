@@ -1,11 +1,12 @@
-"""Chaos runner: breaks the shop with krkn (via krknctl) and stops itself when it hurts too much.
+"""Chaos runner: breaks the shop with krkn (via krknctl) or a flagd failure flag, and stops
+itself when it hurts too much.
 
     uv run python chaos.py list
     uv run python chaos.py run traffic-spike     # writes runs/<id>/{events.jsonl,summary.json,krknctl.log}
 
 Kill switch, checked every second: probe error rate / p95, blast radius (a non-target pod goes
-NotReady), max run time, Ctrl+C, or a file named runs/STOP. On abort: kill krknctl, remove its
-container, delete krkn's helper pods.
+NotReady), max run time, Ctrl+C, or a file named runs/STOP. On abort: switch the flag off, or
+kill krknctl, remove its container and delete krkn's helper pods.
 """
 
 import json
@@ -32,6 +33,8 @@ MIN_SAMPLES = 3
 MIN_HITS = 2  # one failed or slow probe is a blip; the switch needs two inside the window
 RECOVER_STREAK = 5  # consecutive healthy probes that count as "back to baseline"
 RECOVER_TIMEOUT_S = 120
+FLAGD_POD = "opentelemetry.io/name=flagd"
+FLAG_FILE = "/app/data/demo.flagd.json"  # shared with flagd, which reloads it in under a second
 
 
 def load_experiments() -> list[dict]:
@@ -44,6 +47,30 @@ def krkn_command(exp: dict) -> list[str]:
     for flag, value in exp["params"].items():
         cmd += [f"--{flag}", str(value)]
     return cmd
+
+
+def with_flag(doc: dict, flag: str, variant: str) -> dict:
+    """The flag file with `flag` serving `variant`. A flag with a targeting rule
+    (productCatalogFailure: one product only) ignores defaultVariant, so the rule's match
+    branch gets the variant instead."""
+    f = doc["flags"][flag]
+    if variant not in f["variants"]:
+        raise ValueError(f"{flag} has no variant {variant!r}; it has {sorted(f['variants'])}")
+    rule = f.get("targeting", {}).get("if")
+    if rule and len(rule) == 3:
+        rule[1] = variant
+    else:
+        f["defaultVariant"] = variant
+    return doc
+
+
+def set_flag(flag: str, variant: str):
+    """Rewrites the flag file in place (same inode, so flagd's file watch keeps firing)."""
+    pod = sh("kubectl", "get", "pod", "-n", NS, "-l", FLAGD_POD, "-o", "name").split()[0]
+    exec_in = ["kubectl", "exec", "-n", NS, pod, "-c", "flagd-ui", "--"]
+    doc = with_flag(json.loads(sh(*exec_in, "cat", FLAG_FILE)), flag, variant)
+    subprocess.run(exec_in[:2] + ["-i"] + exec_in[2:] + ["sh", "-c", f"cat > {FLAG_FILE}"],
+                   input=json.dumps(doc, indent=2), text=True, check=True, capture_output=True)
 
 
 def breach(samples: list[tuple], limits: dict) -> str | None:
@@ -134,6 +161,7 @@ def pods() -> dict[str, dict]:
         "labels": p["metadata"].get("labels", {}),
         "ready": any(c["type"] == "Ready" and c["status"] == "True" for c in p["status"].get("conditions", [])),
         "done": p["status"].get("phase") in ("Succeeded", "Failed") or "deletionTimestamp" in p["metadata"],
+        "restarts": sum(c.get("restartCount", 0) for c in p["status"].get("containerStatuses", [])),
     } for p in items}
 
 
@@ -156,6 +184,9 @@ def blast_radius(target: str, before: dict):
 
 def cleanup_fn(exp: dict, pods_before: dict, containers_before: set):
     def cleanup():
+        if exp["scenario"] == "flagd":  # the fault lives in flagd: switching the flag off ends it
+            set_flag(exp["params"]["flag"], "off")
+            return
         for name in set(sh("docker", "ps", "-a", "--format", "{{.Names}}").split()) - containers_before:
             if name.startswith("krknctl-"):
                 sh("docker", "rm", "-f", name)
@@ -224,10 +255,17 @@ def run(exp_id: str) -> dict:
 
     pods_before = pods()
     containers_before = set(sh("docker", "ps", "-a", "--format", "{{.Names}}").split())
-    cmd = krkn_command(exp)
+    if exp["scenario"] == "flagd":
+        # sleep stands in for krknctl: it is the fault's lifetime, so supervise() works unchanged
+        cmd = ["sleep", str(exp["params"]["duration"])]
+    else:
+        cmd = krkn_command(exp)
     log(event="start", id=exp_id, cmd=cmd, baseline_p95_ms=round(baseline_p95))
     print("running:", " ".join(cmd))
     krkn_log = open(out / "krknctl.log", "w")
+    started_at = time.time()
+    if exp["scenario"] == "flagd":
+        set_flag(exp["params"]["flag"], exp["params"]["variant"])
     proc = subprocess.Popen(cmd, stdout=krkn_log, stderr=subprocess.STDOUT, start_new_session=True)
     started = time.monotonic()
     probes = []
@@ -253,6 +291,7 @@ def run(exp_id: str) -> dict:
         "aborted": bool(reason), "abort_reason": reason, "first_bad_probe_to_abort_s": info.get("first_bad_to_abort_s"),
         "abort_to_stopped_s": info.get("breach_to_stopped_s"),
         "duration_s": round(ended - started, 1),
+        "started_at": round(started_at, 1), "ended_at": round(started_at + ended - started, 1),
         "baseline_p95_ms": round(baseline_p95),
         "impact": {"probes": len(probes), "failed": sum(1 for p in probes if not p[1]),
                    "p95_ms": round(p95_ms(probes)), "max_ms": round(max((p[2] for p in probes), default=0))},
@@ -275,7 +314,7 @@ def run(exp_id: str) -> dict:
 if __name__ == "__main__":
     if sys.argv[1:2] == ["list"]:
         for e in load_experiments():
-            print(f"{e['id']:15} {e['scenario']:15} {e['target']}")
+            print(f"{e['id']:21} {e['scenario']:15} {e['target']}")
     elif len(sys.argv) == 3 and sys.argv[1] == "run":
         run(sys.argv[2])
     else:
