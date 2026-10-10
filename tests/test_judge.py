@@ -101,3 +101,46 @@ def test_compound_and_hit_rate():
     assert judge.compound("high", ["medium", "low"]) == "compound"
     assert judge.compound("high", ["high", "low"]) == "independent"
     assert judge.hit_rate({"blast-loss": "high", "payment-kill": "high"}, BANK) == (1, 2)
+
+
+def test_a_big_customer_slowdown_counts_as_no_answer():
+    # checkout p95 48 -> 3650 ms is 76x: customers effectively get no answer, not just a slow one
+    assert judge.score(BANK["blast-latency"]) == (11, 15, ["customers get answers", "customers aren't 2x slower"])
+    # 48 -> 330 ms is 7x and under 2 s: still only the 1-point warning
+    assert judge.score(BANK["cpu-starve"])[:2] == (14, 15)
+
+
+# Real notes nemotron wrote on the Arch box (2026-10-11)
+CART_NOTE = {"what_happened": "Pod kill erased in-memory cart items (1→0), shop recovered instantly (0.0s), "
+                              "no data loss, SLO preserved",
+             "why": "valkey-cart has no volume (memory only); pod loss immediately loses cart state with no "
+                    "persistent impact, per service-facts", "evidence": ["bank.json:cart-wipe", "service-facts"]}
+LOSS_NOTE = {"what_happened": "Backend packet loss spiked checkout p95 from 48ms to 8125ms, errors to 8%, though "
+                              "shop stayed online per probe data.",
+             "why": "Checkout sequences charge card then ship; packet loss blocks shipping/quote calls, causing "
+                    "errors and p95 spikes, per service-facts.", "evidence": ["bank.json:blast-loss", "service-facts"]}
+
+
+def test_check_note_catches_claims_the_measurement_disproves():
+    pct, checks = judge.check_note(CART_NOTE, BANK["cart-wipe"], "opentelemetry.io/name=valkey-cart")
+    failed = [why for ok, why in checks if not ok]
+    assert pct == 20  # two claims disproved: "no data loss" and "SLO preserved"
+    assert any("no data loss" in w and "cart items 1 -> 0" in w for w in failed)
+    assert any("slo preserved" in w for w in failed)
+
+
+def test_check_note_marks_a_small_sample():
+    pct, checks = judge.check_note(LOSS_NOTE, BANK["blast-loss"], "node:chaos-worker")
+    assert pct == 80  # grounded, no contradiction, cites evidence; but checkout's error ratio is 5 of 9 calls
+    assert (False, "only 9 checkout calls in the window: a small sample") in checks
+    assert any(ok and "checkout" in why for ok, why in checks)
+
+
+def test_rank_rows_carry_the_reasoning():
+    rows = {r["id"]: r for r in judge.rank(BANK)}
+    assert judge.leverage_text(rows["blast-loss"]) == "3 ÷ 1 = 3"
+    assert judge.leverage_text(rows["cart-wipe"]) == "3 ÷ 2 = 1.5"
+    assert rows["cart-wipe"]["decided_by"] == "cart items 1 -> 0"
+    assert rows["blast-loss"]["decided_by"].startswith("checkout errors")
+    assert rows["quote-garbage"]["repeat_of"] == "blast-loss"  # same cause as #1
+    assert "no data lost" in rows["cart-wipe"]["broken"]
