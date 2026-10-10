@@ -11,6 +11,7 @@ borderColor = "#DDD6C7"              # colors.line
 dataframeBorderColor = "#DDD6C7"     # colors.line
 showWidgetBorder = true
 redColor = "#B42318"                 # colors.error
+codeTextColor = "#17150F"            # colors.on-surface: inline code chips stay ink, not green
 baseRadius = "4px"                   # rounded.sm
 font = "'IBM Plex Sans':https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600&display=swap"
 headingFont = "Fraunces:https://fonts.googleapis.com/css2?family=Fraunces:wght@400;500&display=swap"
