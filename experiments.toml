@@ -1,0 +1,69 @@
+# The menu of chaos experiments (read by chaos.py with tomllib, picked by plan.py).
+# params = krknctl flags for `scenario`, minus the leading "--". chaos.py always adds
+# --wait-duration 1 and --prometheus-url.
+# target = pod label chaos may break ("key=value"), or "node:<name>" for node-level faults.
+# abort_if = the kill switch: probe error rate (0-1), probe p95 in ms, hard run limit in s
+# (max_s includes krknctl's own ~1-2 min of start/finish overhead).
+
+[[experiment]]
+id = "cart-wipe"
+scenario = "pod-scenarios"
+target = "opentelemetry.io/name=valkey-cart"
+probe_url = "http://localhost:8080/api/products"
+impact = "cart" # add a cart item before, read it back after
+[experiment.params]
+namespace = "^otel-demo$"
+pod-label = "opentelemetry.io/name=valkey-cart"
+disruption-count = 1
+expected-recovery-time = 120
+[experiment.abort_if]
+error_rate = 0.5
+p95_ms = 2000
+max_s = 240
+
+[[experiment]]
+id = "traffic-spike"
+scenario = "http-load"
+target = "opentelemetry.io/name=frontend-proxy" # the pod under load; its NotReady is not "blast radius"
+probe_url = "http://localhost:8080/api/products"
+[experiment.params]
+target-endpoints = "GET http://frontend-proxy.otel-demo:8080/;GET http://frontend-proxy.otel-demo:8080/api/products" # krkn format: METHOD URL;METHOD URL
+rate = "1000/1s"
+chaos-duration = "120s"
+namespace = "otel-demo"
+number-of-pods = 2
+[experiment.abort_if]
+error_rate = 0.3
+p95_ms = 250 # baseline is ~5-15 ms; 250 ms is a shop 20x slower
+max_s = 240
+
+[[experiment]]
+id = "cpu-starve"
+scenario = "node-cpu-hog"
+target = "node:chaos-worker"
+probe_url = "http://localhost:8080/api/products"
+[experiment.params]
+chaos-duration = 60
+cpu-percentage = 80
+namespace = "otel-demo"
+node-selector = "kubernetes.io/hostname=chaos-worker"
+[experiment.abort_if]
+error_rate = 0.5
+p95_ms = 3000
+max_s = 240
+
+# stretch
+[[experiment]]
+id = "kafka-outage"
+scenario = "pod-scenarios"
+target = "opentelemetry.io/name=kafka"
+probe_url = "http://localhost:8080/api/products"
+[experiment.params]
+namespace = "^otel-demo$"
+pod-label = "opentelemetry.io/name=kafka"
+disruption-count = 1
+expected-recovery-time = 120
+[experiment.abort_if]
+error_rate = 0.5
+p95_ms = 2000
+max_s = 240
