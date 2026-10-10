@@ -1,0 +1,679 @@
+{
+ "nodes": {
+  "accounting": {
+   "replicas": 1,
+   "store": null,
+   "persistent": false,
+   "callers": [],
+   "flags": [
+    "single-replica"
+   ]
+  },
+  "ad": {
+   "replicas": 1,
+   "store": null,
+   "persistent": false,
+   "callers": [
+    "frontend"
+   ],
+   "flags": [
+    "single-replica"
+   ]
+  },
+  "agent": {
+   "replicas": 1,
+   "store": null,
+   "persistent": false,
+   "callers": [
+    "chatbot",
+    "load-generator"
+   ],
+   "flags": [
+    "single-replica"
+   ]
+  },
+  "astronomy-db": {
+   "replicas": 1,
+   "store": "postgres",
+   "persistent": false,
+   "callers": [
+    "accounting",
+    "product-catalog"
+   ],
+   "flags": [
+    "single-replica",
+    "no-persistence"
+   ]
+  },
+  "cart": {
+   "replicas": 1,
+   "store": null,
+   "persistent": false,
+   "callers": [
+    "checkout",
+    "frontend"
+   ],
+   "flags": [
+    "single-replica"
+   ]
+  },
+  "chatbot": {
+   "replicas": 1,
+   "store": null,
+   "persistent": false,
+   "callers": [
+    "frontend-proxy"
+   ],
+   "flags": [
+    "single-replica"
+   ]
+  },
+  "checkout": {
+   "replicas": 1,
+   "store": null,
+   "persistent": false,
+   "callers": [
+    "frontend"
+   ],
+   "flags": [
+    "single-replica"
+   ]
+  },
+  "currency": {
+   "replicas": 1,
+   "store": null,
+   "persistent": false,
+   "callers": [
+    "checkout",
+    "frontend"
+   ],
+   "flags": [
+    "single-replica"
+   ]
+  },
+  "email": {
+   "replicas": 1,
+   "store": null,
+   "persistent": false,
+   "callers": [
+    "checkout"
+   ],
+   "flags": [
+    "single-replica"
+   ]
+  },
+  "flagd": {
+   "replicas": 1,
+   "store": null,
+   "persistent": false,
+   "callers": [
+    "ad",
+    "agent",
+    "cart",
+    "checkout",
+    "email",
+    "fraud-detection",
+    "frontend",
+    "frontend-proxy",
+    "load-generator",
+    "payment",
+    "product-catalog",
+    "recommendation",
+    "shipping"
+   ],
+   "flags": [
+    "single-replica",
+    "hub"
+   ]
+  },
+  "fraud-detection": {
+   "replicas": 1,
+   "store": null,
+   "persistent": false,
+   "callers": [],
+   "flags": [
+    "single-replica"
+   ]
+  },
+  "frontend": {
+   "replicas": 1,
+   "store": null,
+   "persistent": false,
+   "callers": [
+    "agent",
+    "frontend-proxy",
+    "mcp"
+   ],
+   "flags": [
+    "single-replica",
+    "hub"
+   ]
+  },
+  "frontend-proxy": {
+   "replicas": 1,
+   "store": null,
+   "persistent": false,
+   "callers": [
+    "frontend-web",
+    "load-generator"
+   ],
+   "flags": [
+    "single-replica"
+   ]
+  },
+  "frontend-web": {
+   "replicas": null,
+   "store": null,
+   "persistent": null,
+   "callers": [],
+   "flags": []
+  },
+  "grafana": {
+   "replicas": 1,
+   "store": null,
+   "persistent": false,
+   "callers": [
+    "frontend-proxy"
+   ],
+   "flags": [
+    "single-replica"
+   ]
+  },
+  "image-provider": {
+   "replicas": 1,
+   "store": null,
+   "persistent": false,
+   "callers": [
+    "frontend-proxy"
+   ],
+   "flags": [
+    "single-replica"
+   ]
+  },
+  "jaeger": {
+   "replicas": 1,
+   "store": null,
+   "persistent": false,
+   "callers": [
+    "frontend-proxy"
+   ],
+   "flags": [
+    "single-replica"
+   ]
+  },
+  "kafka": {
+   "replicas": 1,
+   "store": "kafka",
+   "persistent": false,
+   "callers": [
+    "accounting",
+    "checkout",
+    "fraud-detection"
+   ],
+   "flags": [
+    "single-replica",
+    "no-persistence",
+    "hub"
+   ]
+  },
+  "load-generator": {
+   "replicas": 1,
+   "store": null,
+   "persistent": false,
+   "callers": [
+    "frontend-proxy"
+   ],
+   "flags": [
+    "single-replica"
+   ]
+  },
+  "mcp": {
+   "replicas": 1,
+   "store": null,
+   "persistent": false,
+   "callers": [
+    "agent"
+   ],
+   "flags": [
+    "single-replica"
+   ]
+  },
+  "opamp-server": {
+   "replicas": 1,
+   "store": null,
+   "persistent": false,
+   "callers": [
+    "cart",
+    "chatbot",
+    "frontend-proxy",
+    "product-catalog"
+   ],
+   "flags": [
+    "single-replica",
+    "hub"
+   ]
+  },
+  "opensearch": {
+   "replicas": 1,
+   "store": null,
+   "persistent": false,
+   "callers": [],
+   "flags": [
+    "single-replica"
+   ]
+  },
+  "payment": {
+   "replicas": 1,
+   "store": null,
+   "persistent": false,
+   "callers": [
+    "checkout"
+   ],
+   "flags": [
+    "single-replica"
+   ]
+  },
+  "product-catalog": {
+   "replicas": 1,
+   "store": null,
+   "persistent": false,
+   "callers": [
+    "checkout",
+    "frontend",
+    "recommendation"
+   ],
+   "flags": [
+    "single-replica",
+    "hub"
+   ]
+  },
+  "prometheus": {
+   "replicas": 1,
+   "store": null,
+   "persistent": false,
+   "callers": [
+    "jaeger"
+   ],
+   "flags": [
+    "single-replica"
+   ]
+  },
+  "quote": {
+   "replicas": 1,
+   "store": null,
+   "persistent": false,
+   "callers": [
+    "shipping"
+   ],
+   "flags": [
+    "single-replica"
+   ]
+  },
+  "recommendation": {
+   "replicas": 1,
+   "store": null,
+   "persistent": false,
+   "callers": [
+    "frontend"
+   ],
+   "flags": [
+    "single-replica"
+   ]
+  },
+  "shipping": {
+   "replicas": 1,
+   "store": null,
+   "persistent": false,
+   "callers": [
+    "checkout",
+    "frontend"
+   ],
+   "flags": [
+    "single-replica"
+   ]
+  },
+  "telemetry-docs": {
+   "replicas": 1,
+   "store": null,
+   "persistent": false,
+   "callers": [
+    "frontend-proxy"
+   ],
+   "flags": [
+    "single-replica"
+   ]
+  },
+  "valkey-cart": {
+   "replicas": 1,
+   "store": "valkey/redis",
+   "persistent": false,
+   "callers": [
+    "cart"
+   ],
+   "flags": [
+    "single-replica",
+    "no-persistence"
+   ]
+  }
+ },
+ "edges": [
+  {
+   "from": "accounting",
+   "to": "astronomy-db",
+   "calls": null,
+   "source": "env"
+  },
+  {
+   "from": "accounting",
+   "to": "kafka",
+   "calls": null,
+   "source": "env"
+  },
+  {
+   "from": "ad",
+   "to": "flagd",
+   "calls": 1,
+   "source": "jaeger"
+  },
+  {
+   "from": "agent",
+   "to": "flagd",
+   "calls": null,
+   "source": "env"
+  },
+  {
+   "from": "agent",
+   "to": "frontend",
+   "calls": null,
+   "source": "env"
+  },
+  {
+   "from": "agent",
+   "to": "mcp",
+   "calls": null,
+   "source": "env"
+  },
+  {
+   "from": "cart",
+   "to": "flagd",
+   "calls": 75,
+   "source": "jaeger"
+  },
+  {
+   "from": "cart",
+   "to": "opamp-server",
+   "calls": null,
+   "source": "env"
+  },
+  {
+   "from": "cart",
+   "to": "valkey-cart",
+   "calls": null,
+   "source": "env"
+  },
+  {
+   "from": "chatbot",
+   "to": "agent",
+   "calls": null,
+   "source": "env"
+  },
+  {
+   "from": "chatbot",
+   "to": "opamp-server",
+   "calls": null,
+   "source": "env"
+  },
+  {
+   "from": "checkout",
+   "to": "cart",
+   "calls": 90,
+   "source": "jaeger"
+  },
+  {
+   "from": "checkout",
+   "to": "currency",
+   "calls": 131,
+   "source": "jaeger"
+  },
+  {
+   "from": "checkout",
+   "to": "email",
+   "calls": 45,
+   "source": "jaeger"
+  },
+  {
+   "from": "checkout",
+   "to": "flagd",
+   "calls": null,
+   "source": "env"
+  },
+  {
+   "from": "checkout",
+   "to": "kafka",
+   "calls": null,
+   "source": "env"
+  },
+  {
+   "from": "checkout",
+   "to": "payment",
+   "calls": 45,
+   "source": "jaeger"
+  },
+  {
+   "from": "checkout",
+   "to": "product-catalog",
+   "calls": 86,
+   "source": "jaeger"
+  },
+  {
+   "from": "checkout",
+   "to": "shipping",
+   "calls": 90,
+   "source": "jaeger"
+  },
+  {
+   "from": "email",
+   "to": "flagd",
+   "calls": null,
+   "source": "env"
+  },
+  {
+   "from": "fraud-detection",
+   "to": "flagd",
+   "calls": null,
+   "source": "env"
+  },
+  {
+   "from": "fraud-detection",
+   "to": "kafka",
+   "calls": null,
+   "source": "env"
+  },
+  {
+   "from": "frontend",
+   "to": "ad",
+   "calls": 318,
+   "source": "jaeger"
+  },
+  {
+   "from": "frontend",
+   "to": "cart",
+   "calls": 1283,
+   "source": "jaeger"
+  },
+  {
+   "from": "frontend",
+   "to": "checkout",
+   "calls": 45,
+   "source": "jaeger"
+  },
+  {
+   "from": "frontend",
+   "to": "currency",
+   "calls": 786,
+   "source": "jaeger"
+  },
+  {
+   "from": "frontend",
+   "to": "flagd",
+   "calls": null,
+   "source": "env"
+  },
+  {
+   "from": "frontend",
+   "to": "product-catalog",
+   "calls": 3996,
+   "source": "jaeger"
+  },
+  {
+   "from": "frontend",
+   "to": "recommendation",
+   "calls": 739,
+   "source": "jaeger"
+  },
+  {
+   "from": "frontend",
+   "to": "shipping",
+   "calls": 123,
+   "source": "jaeger"
+  },
+  {
+   "from": "frontend-proxy",
+   "to": "chatbot",
+   "calls": null,
+   "source": "env"
+  },
+  {
+   "from": "frontend-proxy",
+   "to": "flagd",
+   "calls": 454,
+   "source": "jaeger"
+  },
+  {
+   "from": "frontend-proxy",
+   "to": "frontend",
+   "calls": 10354,
+   "source": "jaeger"
+  },
+  {
+   "from": "frontend-proxy",
+   "to": "grafana",
+   "calls": null,
+   "source": "env"
+  },
+  {
+   "from": "frontend-proxy",
+   "to": "image-provider",
+   "calls": 3768,
+   "source": "jaeger"
+  },
+  {
+   "from": "frontend-proxy",
+   "to": "jaeger",
+   "calls": 1,
+   "source": "jaeger"
+  },
+  {
+   "from": "frontend-proxy",
+   "to": "load-generator",
+   "calls": null,
+   "source": "env"
+  },
+  {
+   "from": "frontend-proxy",
+   "to": "opamp-server",
+   "calls": null,
+   "source": "env"
+  },
+  {
+   "from": "frontend-proxy",
+   "to": "telemetry-docs",
+   "calls": null,
+   "source": "env"
+  },
+  {
+   "from": "frontend-web",
+   "to": "frontend-proxy",
+   "calls": 5329,
+   "source": "jaeger"
+  },
+  {
+   "from": "jaeger",
+   "to": "prometheus",
+   "calls": null,
+   "source": "env"
+  },
+  {
+   "from": "load-generator",
+   "to": "agent",
+   "calls": null,
+   "source": "env"
+  },
+  {
+   "from": "load-generator",
+   "to": "flagd",
+   "calls": null,
+   "source": "env"
+  },
+  {
+   "from": "load-generator",
+   "to": "frontend-proxy",
+   "calls": null,
+   "source": "env"
+  },
+  {
+   "from": "mcp",
+   "to": "frontend",
+   "calls": null,
+   "source": "env"
+  },
+  {
+   "from": "payment",
+   "to": "flagd",
+   "calls": 5,
+   "source": "jaeger"
+  },
+  {
+   "from": "product-catalog",
+   "to": "astronomy-db",
+   "calls": null,
+   "source": "env"
+  },
+  {
+   "from": "product-catalog",
+   "to": "flagd",
+   "calls": null,
+   "source": "env"
+  },
+  {
+   "from": "product-catalog",
+   "to": "opamp-server",
+   "calls": null,
+   "source": "env"
+  },
+  {
+   "from": "recommendation",
+   "to": "flagd",
+   "calls": null,
+   "source": "env"
+  },
+  {
+   "from": "recommendation",
+   "to": "product-catalog",
+   "calls": 739,
+   "source": "jaeger"
+  },
+  {
+   "from": "shipping",
+   "to": "flagd",
+   "calls": null,
+   "source": "env"
+  },
+  {
+   "from": "shipping",
+   "to": "quote",
+   "calls": 168,
+   "source": "jaeger"
+  }
+ ]
+}
