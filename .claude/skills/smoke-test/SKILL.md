@@ -15,6 +15,26 @@ Rules:
 - Each Bash call starts a fresh shell, so run every gate as one command block.
 - Write down how long each step took. The report needs it.
 
+## Downloads: this is the complete list
+Install exactly these. Nothing else is needed.
+1. pacman packages: `docker kubectl helm jq curl`
+2. `kind` binary from `github.com/kubernetes-sigs/kind` releases (command in step 0)
+3. `krknctl` binary from `github.com/krkn-chaos/krknctl` releases (command in step 0)
+4. One helm repo: `https://open-telemetry.github.io/opentelemetry-helm-charts`. The
+   `opentelemetry-demo` chart bundles Jaeger, Prometheus, Grafana, OpenSearch and the collector.
+
+These images download automatically. Don't pull them by hand, except the two krkn
+images in step 1:
+- `kindest/node`, by `kind create cluster`
+- the shop and its bundled tools, by `helm install`
+- `containers.krkn-chaos.dev/krkn-chaos/krkn-hub:pod-scenarios` and `:pod-network-filter`, by krknctl
+- `quay.io/krkn-chaos/krkn-network-chaos`, pulled by the kind node during G4
+
+**Do NOT** clone or install any of these:
+- the source repos of krkn, krkn-hub, krkn-ai, krknctl, opentelemetry-demo or Ditto
+- krkn-ai, pip/uv packages, podman, minikube, docker-compose
+- a separate Prometheus, Jaeger, Grafana or kube-prometheus-stack
+
 ## 0. Prerequisites
 Check `docker kubectl helm jq curl kind krknctl` with `command -v`. If any are missing:
 - Ask the user to run `! sudo pacman -S --needed docker kubectl helm jq curl`,
@@ -38,8 +58,9 @@ helm status otel -n otel-demo >/dev/null 2>&1 || \
   helm install otel open-telemetry/opentelemetry-demo -n otel-demo --create-namespace \
     -f k8s/otel-values.yaml --wait --timeout 20m
 ```
-Image pulls take most of the time. Pull the krkn image in the background meanwhile:
-`docker pull containers.krkn-chaos.dev/krkn-chaos/krkn-hub:pod-scenarios`.
+Image pulls take most of the time. Pull the two krkn images in the background meanwhile:
+`docker pull containers.krkn-chaos.dev/krkn-chaos/krkn-hub:pod-scenarios` and
+`docker pull containers.krkn-chaos.dev/krkn-chaos/krkn-hub:pod-network-filter`.
 
 ## G1: app healthy, memory headroom
 ```bash
