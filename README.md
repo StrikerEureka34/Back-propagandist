@@ -5,22 +5,73 @@ spreads. The shop is the [OpenTelemetry Astronomy Shop](https://github.com/open-
 (about 20 services, Apache-2.0). The breaking is done by [krkn](https://github.com/krkn-chaos/krkn).
 Everything runs in a local Kubernetes cluster (kind) on one laptop.
 
-## How it works
+## The whole workflow
 
 ```
-1. MAP      depmap.py      who calls whom (Jaeger traces) + what talks to the databases (config)
-                           → flags the risky parts: no disk, many dependents
-2. PICK     experiments.toml   a fixed menu of failures; a person picks and starts each run
-                           (next: an AI ranks this menu using the map)
-3. BREAK    chaos.py       krkn injects the failure
-4. WATCH    chaos.py       a pretend customer checks the shop every second
-   + STOP                  too slow, too many errors, something else breaks, or too long → stop
-5. MEASURE  runs/<id>/     impact, how fast it stopped, how fast the shop recovered
+ Jaeger traces + cluster config
+            │
+            ▼
+ 1 MAP      depmap.py ──────────────────────► console (app.py)
+            │ risky targets
+            ▼
+ 2 PICK     experiments.toml ◄── a person picks (next: an AI ranks the menu)
+            │
+            ▼
+ 3 BREAK    chaos.py ─► krknctl ─► krkn ─► kills a pod, or starts attacker / CPU-hog pods
+            │
+            ▼
+ 4 WATCH    one check per second + "did any other pod break?"
+            │
+            ├── limit hit, or a person says stop
+            │        ▼
+            │   5 STOP   kill krkn, remove its pods
+            │        │
+            ▼        ▼
+ 6 MEASURE  runs/<id>/summary.json: impact, time to stop, time to recover
+            bank.py: every service from Prometheus → high / medium / low (bank.json)
 ```
+
+| Step | What happens | Who does it |
+|---|---|---|
+| 1 Map | Reads who calls whom from Jaeger traces, and how each service reaches the databases from its config. Flags the risky parts: no disk, many dependents. | us (`depmap.py`) |
+| 2 Pick | Choose a failure from a fixed menu. Each one carries its own stop limits. | a person (next: an AI ranks the menu using the map) |
+| 3 Break | `chaos.py` starts `krknctl`, which runs krkn in its own container. krkn talks to Kubernetes and kills a pod, or starts attacker or CPU-hog pods. | krkn |
+| 4 Watch | Every second, one test request to the shop, like a customer would make, plus a check that no other pod broke. | us (`chaos.py`) |
+| 5 Stop | Too slow, too many errors, another pod down, running too long, or a person says stop: kill krkn, remove its pods. | us (`chaos.py`) |
+| 6 Measure | Wait until the shop is normal again, then write down the impact, the time to stop and the time to recover. Killed pods are restarted by Kubernetes, and krkn times that. The fault bank also rates the fault high / medium / low from every service's metrics. | us + krkn |
 
 The map found 35 of the 36 links in the shop's official architecture diagram, plus 10 real
 ones the diagram leaves out. Biggest single point of failure: the feature-flag service (flagd),
-which 13 services depend on.
+which 13 services depend on. You can see the map and the risk table in the console, and the
+per-service slowdown in Jaeger's Monitor tab.
+
+## How we measure
+
+- **Before:** 5 checks of the shop give its normal speed (the baseline). If the shop is already
+  unhealthy, the run refuses to start.
+- **During:** one check per second while krkn runs gives the impact: how many checks, how many
+  failed, the near-worst wait (p95) and the worst one.
+- **After:** checks continue until 5 in a row are normal again. That's the recovery time.
+- Every check is logged in `runs/<id>/events.jsonl`, and `summary.json` is computed from it,
+  so every number can be traced back to the log.
+- **Every service:** for the fault bank, `bank.py` compares each service's errors, p95 and
+  throughput (from traces in Prometheus), plus CPU, memory and restarts, with the 5 minutes
+  before the fault.
+
+## Where it runs
+
+```
+Laptop (16 CPU threads, 16 GB RAM)
+└── Docker
+    ├── chaos-control-plane   Kubernetes itself
+    ├── chaos-worker          "blast": the backend services; node faults hit this one
+    ├── chaos-worker2         "steady": monitoring, frontend, flagd, load generator
+    └── krknctl-…             krkn, only while an experiment runs
+```
+
+kind fakes the Kubernetes "nodes" as Docker containers, so they all share the laptop's CPU
+and memory. Two workers give network faults a real network to slow between the frontend and
+the backends. Keeping monitoring on the steady node means a fault never blinds the kill switch.
 
 ## The traffic spike
 
@@ -34,7 +85,8 @@ We hit the shop's front door with 2 attacker pods sending 1,000 requests a secon
 We ran it again with the slowness and error limits switched off. The attack kept going,
 customers started getting timeouts, and the flood of traces crashed Jaeger (out of memory).
 The blast-radius check caught that and stopped the run at 52 s. Without any stop at all,
-it would have run its full 2 minutes.
+it would have run its full 2 minutes. Its slowness and error limits are now switched off, so
+the fault bank sees the full effect: only the blast-radius check and a manual stop end it early.
 
 You can stop any run yourself: `touch runs/STOP` from another terminal, or Ctrl+C.
 
@@ -57,6 +109,8 @@ uv run python depmap.py --check        # dependency map vs the official diagram
 uv run streamlit run app.py            # console with the map: http://localhost:8501
 uv run python chaos.py list            # the failure menu
 uv run python chaos.py run traffic-spike
+uv run python bank.py run all          # rate every fault (~3-5 min each)
+uv run python bank.py show             # the fault bank, by tier
 uv run pytest -q                       # tests (Linux)
 ```
 
@@ -67,9 +121,12 @@ Prometheus: http://localhost:9090.
 
 ```
 app.py              the console (Streamlit): dependency map, risk table
+pages/              console pages: Live run (shop health, per-service damage, the bank)
 depmap.py           builds the dependency map and the risk flags
 chaos.py            runs a krkn experiment, watches it, stops it, cleans up
+bank.py, bank.json  rates each fault high / medium / low from measured effects
 experiments.toml    the failure menu and each one's stop limits
+scenarios/          krkn scenario files (service hijacking)
 k8s/                kind cluster config + shop install settings
 tests/              tests for the map and the kill switch
 docs/               problem statement, official diagram edges, progress notes
@@ -77,10 +134,21 @@ evidence/           results from our runs on the cluster
 runs/               output of each run (local only)
 ```
 
-## Three other failures
+## The fault bank
 
-| Failure | What krkn did | What we saw |
-|---|---|---|
-| Cart wipe | killed the cart database (Valkey) | back in 0.9 s, but every cart was empty: it keeps carts in memory only |
-| Kafka outage | killed the order queue | back in 0.5 s. The real damage is quieter: the shop charges the card first and queues the order last, so orders can skip the fraud check. Not measured yet |
-| CPU starve | burned 80% of the CPU for 60 s | no slowdown at all: the shop has CPU to spare |
+Every fault is injected from outside the app by krkn, measured, and rated:
+- **high:** customers hit errors or lose data, or the shop doesn't recover
+- **medium:** another service errors, or the customer-facing side is 2x slower
+- **low:** anything less
+
+Two of the shop's own planted bugs are known-answer controls. If they don't rate as expected,
+the measurement is broken, not the shop.
+
+| Tier | Faults (measured on the 2-worker cluster) |
+|---|---|
+| high | **blast-loss**: 10 % packet loss → checkout errors 56 %. **quote-garbage**: a 200 OK with a wrong body → checkout errors 58 %. **catalog-kill**: shop not healthy 120 s later. **catalog-db-cutoff**: frontend p95 → 15 s. **cart-wipe**: carts lost |
+| medium | **blast-latency**: +200 ms → checkout p95 48 → 3,650 ms. **cpu-starve**: 100 % CPU. **recommendation-cutoff** |
+| low | payment-kill, kafka-outage, blast-memory |
+| controls | paymentFailure → high ✓, adHighCpu → low ✓ |
+
+`uv run python bank.py show` prints every effect behind each rating.
