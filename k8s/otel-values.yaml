@@ -1,7 +1,17 @@
 # Overrides for open-telemetry/opentelemetry-demo. Everything else stays at chart defaults,
 # which is what the chart's own CI installs on kind.
+default:
+  schedulingRules:
+    nodeSelector: {chaos-zone: blast} # backends; the steady ones override below (k8s/kind.yaml)
+
 components:
+  frontend: {schedulingRules: {nodeSelector: {chaos-zone: steady}}}
+  load-generator: {schedulingRules: {nodeSelector: {chaos-zone: steady}}}
+  flagd: {schedulingRules: {nodeSelector: {chaos-zone: steady}}}
+  telemetry-docs: {schedulingRules: {nodeSelector: {chaos-zone: steady}}}
+  opamp-server: {schedulingRules: {nodeSelector: {chaos-zone: steady}}}
   frontend-proxy:
+    schedulingRules: {nodeSelector: {chaos-zone: steady}}
     service:
       type: NodePort
       nodePort: 30080 # host :8080 via k8s/kind.yaml
@@ -13,9 +23,19 @@ components:
 
 prometheus:
   server:
+    nodeSelector: {chaos-zone: steady}
     service:
       type: NodePort
       nodePort: 30090 # host :9090 via k8s/kind.yaml
+
+jaeger:
+  jaeger:
+    nodeSelector: {chaos-zone: steady}
+grafana:
+  nodeSelector: {chaos-zone: steady}
+opensearch:
+  nodeSelector: {chaos-zone: steady}
+# The collector is a DaemonSet (one per node), so it stays unpinned.
 
 # opensearch:
 #   enabled: false

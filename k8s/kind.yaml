@@ -1,5 +1,9 @@
-# Chaos sandbox. App pods land on the worker; the control plane maps NodePorts to the host:
+# Chaos sandbox. The control plane maps NodePorts to the host:
 # 8080 = frontend-proxy (shop, /jaeger/ui, /grafana, /loadgen, /feature), 9090 = Prometheus.
+# Two workers so network faults have a network to slow: pod-to-pod traffic on one node never
+# leaves the node's bridge. chaos-zone (k8s/otel-values.yaml) pins who lives where:
+#   blast  = chaos-worker:  the backend services, the node faults target this one
+#   steady = chaos-worker2: monitoring + frontend, so a fault never blinds the kill switch
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 name: chaos
@@ -10,4 +14,9 @@ nodes:
         hostPort: 8080
       - containerPort: 30090
         hostPort: 9090
-  - role: worker
+  - role: worker # chaos-worker
+    labels:
+      chaos-zone: blast
+  - role: worker # chaos-worker2
+    labels:
+      chaos-zone: steady
