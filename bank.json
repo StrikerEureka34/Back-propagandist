@@ -42,7 +42,10 @@
     "control": {
       "expected": "high",
       "pass": true
-    }
+    },
+    "fault_ended_at": 1791650958.7,
+    "recovered_s": null,
+    "recovery_checked_s": 70
   },
   "control-ad-cpu": {
     "tier": "low",
@@ -82,7 +85,10 @@
     "control": {
       "expected": "low",
       "pass": true
-    }
+    },
+    "fault_ended_at": 1791651148.6,
+    "recovered_s": 150,
+    "recovery_checked_s": 900
   },
   "catalog-kill": {
     "tier": "high",
@@ -186,7 +192,10 @@
         1791653226,
         1791653436
       ]
-    }
+    },
+    "fault_ended_at": 1791653256.4,
+    "recovered_s": null,
+    "recovery_checked_s": 190
   },
   "payment-kill": {
     "tier": "low",
@@ -217,7 +226,10 @@
         1791653446,
         1791653563
       ]
-    }
+    },
+    "fault_ended_at": 1791653503.1,
+    "recovered_s": 0.0,
+    "recovery_checked_s": 70
   },
   "recommendation-cutoff": {
     "tier": "medium",
@@ -266,7 +278,10 @@
         1791653573,
         1791653784
       ]
-    }
+    },
+    "fault_ended_at": 1791653723.9,
+    "recovered_s": null,
+    "recovery_checked_s": 70
   },
   "catalog-db-cutoff": {
     "tier": "high",
@@ -324,7 +339,10 @@
         1791653794,
         1791653894
       ]
-    }
+    },
+    "fault_ended_at": 1791653830.0,
+    "recovered_s": 150,
+    "recovery_checked_s": 529
   },
   "blast-latency": {
     "tier": "medium",
@@ -392,7 +410,10 @@
         1791655454,
         1791655667
       ]
-    }
+    },
+    "fault_ended_at": 1791655606.8,
+    "recovered_s": null,
+    "recovery_checked_s": 70
   },
   "blast-memory": {
     "tier": "low",
@@ -440,7 +461,10 @@
         1791654359,
         1791654573
       ]
-    }
+    },
+    "fault_ended_at": 1791654512.6,
+    "recovered_s": null,
+    "recovery_checked_s": 69
   },
   "cart-wipe": {
     "tier": "high",
@@ -485,7 +509,10 @@
         1791654582,
         1791654668
       ]
-    }
+    },
+    "fault_ended_at": 1791654608.4,
+    "recovered_s": null,
+    "recovery_checked_s": 70
   },
   "cpu-starve": {
     "tier": "medium",
@@ -522,7 +549,10 @@
         1791652528,
         1791652679
       ]
-    }
+    },
+    "fault_ended_at": 1791652618.8,
+    "recovered_s": 150,
+    "recovery_checked_s": 607
   },
   "kafka-outage": {
     "tier": "low",
@@ -559,7 +589,10 @@
         1791654678,
         1791654766
       ]
-    }
+    },
+    "fault_ended_at": 1791654706.2,
+    "recovered_s": 270,
+    "recovery_checked_s": 434
   },
   "blast-loss": {
     "tier": "high",
@@ -636,7 +669,10 @@
         1791655677,
         1791655891
       ]
-    }
+    },
+    "fault_ended_at": 1791655830.6,
+    "recovered_s": 150,
+    "recovery_checked_s": 242
   },
   "quote-garbage": {
     "tier": "high",
@@ -681,6 +717,9 @@
         1791655140,
         1791655444
       ]
-    }
+    },
+    "fault_ended_at": 1791655384.0,
+    "recovered_s": null,
+    "recovery_checked_s": 70
   }
 }

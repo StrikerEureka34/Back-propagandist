@@ -6,7 +6,8 @@
 Effects come from Prometheus (per-service span metrics, per-container CPU / memory) over the
 fault window, compared with a baseline window taken once before the first fault, plus what
 chaos.py measured (shop probe, recovery, cart contents) and pod restarts. Results go to
-bank.json, one entry per experiment; the latest run wins. An experiment with `expect` is a
+bank.json, one entry per experiment; the latest run wins. `bank.py recovery` (also run after every
+batch) works out how long each fault's damage lasted after the fault stopped. An experiment with `expect` is a
 known-answer control: a different tier means the measurement is broken, not the shop.
 
 Tiers:
@@ -47,6 +48,9 @@ CPU = 2.0, 0.2  # 2x the baseline and +0.2 cores
 MEM = 1.5, 100 * 2**20  # 1.5x the baseline and +100 MiB
 SPANS = 'span_kind=~"SPAN_KIND_SERVER|SPAN_KIND_CONSUMER"'
 TIERS = ("high", "medium", "low")
+METRIC_KINDS = {"errors", "latency", "throughput", "cpu", "memory"}  # effects Prometheus can re-check
+RECOVERY_HORIZON_S = 15 * 60
+QUIET_RUN = {"aborted": False, "abort_reason": None, "recovery_s": 0.0, "impact": {"probes": 0, "failed": 0}}
 
 
 def prom(query: str, at: float, key: str) -> dict[str, float]:
@@ -147,6 +151,49 @@ def wait_healthy(url: str, streak: int = 5, timeout_s: int = 300) -> bool:
     return False
 
 
+def recovery(entry: dict, target: str, ended_at: float, until: float, window_fn=None,
+             live: bool = False) -> float | None:
+    """Seconds after the fault stopped until none of its metric damage is left, re-checked every minute
+    over a trailing MIN_WINDOW_S window (so an upper bound, minute-accurate). 0 when the fault left no
+    metric damage; None when some was still there at `until` (the next fault, or the horizon)."""
+    window_fn = window_fn or window
+    damage = {(e["kind"], e.get("service")) for e in entry["effects"] if e["kind"] in METRIC_KINDS}
+    if not damage:
+        return 0.0
+    baseline = window_fn(*entry["windows"]["baseline"])
+    t = ended_at + MIN_WINDOW_S
+    while t <= until:
+        if live:  # measuring as it happens: wait for the minute's metrics to land
+            time.sleep(max(0.0, t + 5 - time.time()))
+        now = window_fn(t - MIN_WINDOW_S, t)
+        left = {(e["kind"], e.get("service")) for e in effects(baseline, now, {}, {}, QUIET_RUN, target)}
+        if not damage & left:
+            return round(t - ended_at)
+        t += SCRAPE_S
+    return None
+
+
+def fill_recovery() -> None:
+    """Adds recovered_s to every bank entry, stopping each check where the next fault started."""
+    bank = load()
+    exps = {e["id"]: e for e in chaos.load_experiments()}
+    starts = sorted(e["windows"]["fault"][0] for e in bank.values() if "windows" in e)
+    for exp_id, e in bank.items():
+        summary_file = chaos.RUNS / exp_id / "summary.json"
+        if "windows" not in e or exp_id not in exps or not summary_file.exists() or e.get("recovery_live"):
+            continue
+        summary = json.loads(summary_file.read_text())
+        if abs(summary["started_at"] - e["windows"]["fault"][0]) > 5:
+            continue  # runs/ holds a later, unrated run of this experiment
+        ended = summary["ended_at"]
+        nxt = min((t for t in starts if t > ended), default=float("inf"))
+        until = min(nxt, ended + RECOVERY_HORIZON_S, time.time() - SCRAPE_S)
+        e["fault_ended_at"] = ended
+        e["recovered_s"] = recovery(e, exps[exp_id]["target"], ended, until)
+        e["recovery_checked_s"] = round(until - ended)
+    BANK.write_text(json.dumps(bank, indent=2) + "\n")
+
+
 def load() -> dict:
     return json.loads(BANK.read_text()) if BANK.exists() else {}
 
@@ -174,6 +221,13 @@ def measure(exp_id: str, baseline: dict) -> dict:
         "measured_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "windows": {"baseline": baseline["span"], "fault": during["span"]},  # epoch s, to re-check in Grafana
     }
+    # Wait for this fault's damage to clear before the next one, measuring how long it takes. It also
+    # means every fault starts on a healed shop.
+    entry["fault_ended_at"] = summary["ended_at"]
+    entry["recovered_s"] = recovery(entry, exp["target"], summary["ended_at"],
+                                    summary["ended_at"] + RECOVERY_HORIZON_S, live=True)
+    entry["recovery_checked_s"] = round(time.time() - summary["ended_at"])
+    entry["recovery_live"] = True
     if "expect" in exp:
         entry["control"] = {"expected": exp["expect"], "pass": entry["tier"] == exp["expect"]}
     bank = load()
@@ -187,22 +241,38 @@ def measure(exp_id: str, baseline: dict) -> dict:
     return entry
 
 
+def recovered_text(e: dict) -> str:
+    if "recovered_s" not in e:
+        return "not checked"
+    if e["recovered_s"] is None and e["recovery_checked_s"] < MIN_WINDOW_S:
+        return f"not measured (next fault {e['recovery_checked_s']} s later)"
+    if e["recovered_s"] is None:
+        return f"not within {e['recovery_checked_s'] // 60} min"
+    return "-" if e["recovered_s"] == 0 else f"within {math.ceil(e['recovered_s'] / 60)} min"
+
+
 def show() -> str:
     bank = load()
-    rows = ["| Tier | Fault | What it is | Effects | Recovery |", "|---|---|---|---|---|"]
+    rows = ["| Tier | Fault | What it is | Effects | Damage gone | Shop page back |", "|---|---|---|---|---|---|"]
     for t in TIERS:
         for exp_id, e in sorted(bank.items()):
             if e["tier"] == t:
                 effs = "; ".join(x["what"] for x in e["effects"]) or "no detectable effect"
-                rec = "none" if e["recovery_s"] is None else f"{e['recovery_s']} s"
+                rec = recovered_text(e)
+                # the probe only watches /api/products: its figure means something only if that page broke
+                hurt = e["shop"]["failed"] or e["shop"]["p95_ms"] > 3 * max(e["baseline_p95_ms"], 1)
+                page = "-" if not hurt else ("not in 120 s" if e["recovery_s"] is None else f"{e['recovery_s']} s")
                 if "control" in e:
                     effs += f" (control, expected {e['control']['expected']}: {'pass' if e['control']['pass'] else 'FAIL'})"
-                rows.append(f"| {t} | {exp_id} | {e['fault']} | {effs} | {rec} |")
+                rows.append(f"| {t} | {exp_id} | {e['fault']} | {effs} | {rec} | {page} |")
     return "\n".join(rows)
 
 
 if __name__ == "__main__":
     if sys.argv[1:2] == ["show"]:
+        print(show())
+    elif sys.argv[1:2] == ["recovery"]:
+        fill_recovery()
         print(show())
     elif sys.argv[1:2] == ["run"] and len(sys.argv) > 2:
         ids = [e["id"] for e in chaos.load_experiments()] if sys.argv[2:] == ["all"] else sys.argv[2:]
@@ -214,5 +284,6 @@ if __name__ == "__main__":
             if not wait_healthy(url):
                 sys.exit(f"shop still unhealthy 5 min after the last fault; stopping before {exp_id}")
             measure(exp_id, baseline)
+        fill_recovery()
     else:
         sys.exit(__doc__)

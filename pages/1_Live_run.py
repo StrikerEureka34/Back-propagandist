@@ -20,7 +20,6 @@ SECONDS_SHOWN = 120
 KRKN_PODS = ("http-load-", "cpu-hog-", "memory-hog-", "pod-filter-")  # krkn's own helper pods are not the shop
 # The kill-switch p95 limit, drawn on the chart. Above the 2000 ms probe cap it can never trip (switch off), so no line.
 LIMIT_MS = next(e for e in chaos.load_experiments() if e["id"] == "traffic-spike")["abort_if"]["p95_ms"]
-NO_RUN = {"aborted": False, "abort_reason": None, "recovery_s": 0.0, "impact": {"probes": 0, "failed": 0}}
 
 st.set_page_config(page_title="Live shop health", layout="wide")
 title_col, stop_col = st.columns([8, 4], vertical_alignment="center")
@@ -113,7 +112,7 @@ def services():
     except OSError:
         st.warning(f"Prometheus at {chaos.PROM} is not answering, so per-service health is unavailable.")
         return
-    effs = bank.effects(usual, now, {}, {}, NO_RUN)
+    effs = bank.effects(usual, now, {}, {}, bank.QUIET_RUN)
     flagged = {e.get("service") for e in effs}
     left, right = st.columns([7, 5])
     with right:

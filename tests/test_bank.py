@@ -128,3 +128,21 @@ def test_only_quote_garbage_skips_the_workload_signature_check():
     cmd = chaos.krkn_command(next(e for e in exps if e["id"] == "quote-garbage"))
     assert cmd[cmd.index("--disable-image-signature") + 1] == "true"
     assert all("--run-unsigned-images" not in chaos.krkn_command(e) for e in exps if e["scenario"] != "flagd")
+
+
+def test_recovery_is_the_first_minute_the_faults_own_damage_is_gone():
+    entry = {"effects": [{"kind": "errors", "service": "checkout", "what": ""}],
+             "windows": {"baseline": [0, 300]}}
+    sick, well = win({"checkout": svc(20, 10)}), win({"checkout": svc(20)})
+    healthy_from = 1000 + bank.MIN_WINDOW_S + 2 * bank.SCRAPE_S  # still erroring for two more minutes
+    fake = lambda start, end: win({"checkout": svc(20)}) if end == 300 else (well if end >= healthy_from else sick)
+    assert bank.recovery(entry, "", 1000, 5000, fake) == healthy_from - 1000
+    assert bank.recovery(entry, "", 1000, healthy_from - 1, fake) is None  # next fault came first
+
+
+def test_a_fault_with_no_metric_damage_has_nothing_to_recover_and_noise_elsewhere_is_ignored():
+    assert bank.recovery({"effects": [{"kind": "data-loss", "what": ""}]}, "", 0, 9999) == 0.0
+    entry = {"effects": [{"kind": "errors", "service": "checkout", "what": ""}], "windows": {"baseline": [0, 300]}}
+    other_noise = win({"checkout": svc(20), "ad": svc(20, 10)})
+    fake = lambda start, end: win({"checkout": svc(20), "ad": svc(20)}) if end == 300 else other_noise
+    assert bank.recovery(entry, "", 1000, 5000, fake) == bank.MIN_WINDOW_S
