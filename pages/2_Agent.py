@@ -272,7 +272,31 @@ def watch(out: Path):
             st.caption(f"Only the first {budget} faults run, one at a time, in this order. The other "
                        f"{len(queue) - left} don't run this session. Pairs run only when 'Also test fault "
                        "pairs' was ticked at the start.")
+        if len(queue) > 1 and not chaos.stop_requested():
+            reorder(out, queue, left)
     analyst_notes(results, newest_first=True)
+
+
+def reorder(out: Path, queue: list[dict], left: int):
+    """A person changes the planner's order. The agent reads order.json before each run, and a card
+    waiting for approval makes way for the new first fault."""
+    with st.expander("Change the run order"):
+        sig = "|".join("+".join(q["ids"]) for q in queue)  # a new queue starts a fresh editor
+        with st.form(f"order-{out.name}-{hash(sig)}", border=False):
+            table = st.data_editor(
+                pd.DataFrame([{"Order": n + 1, "Fault": "+".join(q["ids"]), "Runs this session": "yes" if n < left
+                               else "no"} for n, q in enumerate(queue)]),
+                hide_index=True, width="stretch", disabled=["Fault", "Runs this session"],
+                column_config={"Order": st.column_config.NumberColumn("Order (edit)", min_value=1, step=1,
+                                                                      width="small")})
+            st.caption(f"Type a new number in the Order column, then apply. The top {left} run this session. "
+                       "If a run is waiting for your approval, it is replaced by the new first fault.")
+            if st.form_submit_button("Apply the new order"):
+                keys = table.sort_values("Order", kind="stable")["Fault"].tolist()
+                tmp = out / "order.tmp"
+                tmp.write_text(json.dumps(keys), encoding="utf-8")
+                os.replace(tmp, out / "order.json")  # one step: the agent never reads half a file
+                st.success(f"New order saved. The agent picks it up before the next run. Next up: {keys[0]}.")
 
 
 # ---------------------------------------------------------------- 3 results
