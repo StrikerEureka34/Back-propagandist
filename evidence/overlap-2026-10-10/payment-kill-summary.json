@@ -1,0 +1,26 @@
+{
+  "id": "payment-kill",
+  "scenario": "pod-scenarios",
+  "aborted": false,
+  "abort_reason": null,
+  "first_bad_probe_to_abort_s": null,
+  "abort_to_stopped_s": null,
+  "duration_s": 53.0,
+  "started_at": 1791660938.1,
+  "ended_at": 1791660991.1,
+  "baseline_p95_ms": 5,
+  "impact": {
+    "probes": 53,
+    "failed": 0,
+    "p95_ms": 7,
+    "max_ms": 9
+  },
+  "recovery_s": 0.0,
+  "krkn_exit": 0,
+  "krkn_failed": false,
+  "krkn": {
+    "total_recovery_time": 0.8960354328155518,
+    "pod_readiness_time": 0.7204747200012207,
+    "pod_rescheduling_time": 0.17556071281433105
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "id": "control-ad-cpu",
+  "scenario": "flagd",
+  "aborted": false,
+  "abort_reason": null,
+  "first_bad_probe_to_abort_s": null,
+  "abort_to_stopped_s": null,
+  "duration_s": 120.0,
+  "started_at": 1791660984.2,
+  "ended_at": 1791661104.2,
+  "baseline_p95_ms": 6,
+  "impact": {
+    "probes": 120,
+    "failed": 0,
+    "p95_ms": 7,
+    "max_ms": 12
+  },
+  "recovery_s": 0.0,
+  "krkn_exit": 0,
+  "krkn_failed": false,
+  "krkn": {}
+}
