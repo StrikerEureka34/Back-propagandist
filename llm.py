@@ -1,7 +1,7 @@
 """Every LLM call in the app goes through llm(), so the provider can be swapped in
 one place (for example, if Bosch provides its own model).
 
-Providers: anthropic (default), groq, openrouter. Pick one per call with
+Providers: anthropic (default), groq (and groq2 / groq3 for more Groq keys), openrouter. Pick one per call with
 llm(..., provider="groq"), or set LLM_PROVIDER (and optionally LLM_MODEL) in .env."""
 
 import functools
@@ -18,6 +18,9 @@ load_dotenv()
 # OpenAI-compatible providers: base url, key variable, default model
 OPENAI_STYLE = {
     "groq": ("https://api.groq.com/openai/v1", "GROQ_API_KEY", "openai/gpt-oss-120b"),
+    # more Groq keys for the agent's sub-agents (agent.py ROLES); same API, their own key
+    "groq2": ("https://api.groq.com/openai/v1", "GROQ_API_KEY_2", "openai/gpt-oss-20b"),
+    "groq3": ("https://api.groq.com/openai/v1", "GROQ_API_KEY_3", "openai/gpt-oss-20b"),
     "openrouter": ("https://openrouter.ai/api/v1", "OPENROUTER_API_KEY", "nvidia/nemotron-3.5-lightning:free"),
 }
 

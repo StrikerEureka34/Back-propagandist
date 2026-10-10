@@ -23,6 +23,8 @@ def _fake_urlopen(captured):
 
 @pytest.mark.parametrize("provider,host,key_var", [
     ("groq", "api.groq.com", "GROQ_API_KEY"),
+    ("groq2", "api.groq.com", "GROQ_API_KEY_2"),
+    ("groq3", "api.groq.com", "GROQ_API_KEY_3"),
     ("openrouter", "openrouter.ai", "OPENROUTER_API_KEY"),
 ])
 def test_openai_style_provider_call(monkeypatch, provider, host, key_var):

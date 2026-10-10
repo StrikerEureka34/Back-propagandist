@@ -9,6 +9,15 @@ BANK = json.loads((Path(__file__).parent / "fixtures" / "bank.json").read_text()
 POOL = ["blast-loss", "cart-wipe", "payment-kill", "catalog-kill"]
 
 
+def keys(monkeypatch, *names):
+    """Exactly these provider keys are set, as if only they were in .env."""
+    for name in ("GROQ_API_KEY", "GROQ_API_KEY_2", "GROQ_API_KEY_3", "OPENROUTER_API_KEY"):
+        if name in names:
+            monkeypatch.setenv(name, "k-test")
+        else:
+            monkeypatch.delenv(name, raising=False)
+
+
 def fake_ask(answers: dict):
     """An LLM stand-in that answers by task: plan, analyst (worker), fixer, final."""
     def ask(role, system, prompt, need=None):
@@ -72,6 +81,7 @@ def test_all_models_down_still_gives_a_ranked_report(tmp_path):
 
 def test_ask_falls_back_to_the_other_provider_and_caches(tmp_path, monkeypatch):
     monkeypatch.setattr(agent, "CACHE", tmp_path)
+    keys(monkeypatch, "GROQ_API_KEY", "OPENROUTER_API_KEY")
     calls = []
 
     def fake_llm(prompt, system=None, model=None, max_tokens=None, provider=None, **_):
@@ -89,6 +99,7 @@ def test_ask_falls_back_to_the_other_provider_and_caches(tmp_path, monkeypatch):
 
 def test_a_short_rate_limit_is_waited_out_not_handed_to_the_fallback(tmp_path, monkeypatch):
     monkeypatch.setattr(agent, "CACHE", tmp_path)
+    keys(monkeypatch, "GROQ_API_KEY", "OPENROUTER_API_KEY")
     calls, waits = [], []
 
     def fake_llm(prompt, system=None, model=None, max_tokens=None, provider=None, **_):
@@ -169,3 +180,41 @@ def test_analyst_hears_how_long_the_damage_lasted_not_just_the_shop_page(tmp_pat
                       graph={"nodes": {}, "edges": []})
     agent.session(["blast-loss"], 1, deps, tmp_path)
     assert "Damage gone after the fault: within 3 min" in prompts[0]
+
+
+def test_worker_chain_uses_groq_key_2_then_3_and_skips_unset_keys(tmp_path, monkeypatch):
+    monkeypatch.setattr(agent, "CACHE", tmp_path)
+    keys(monkeypatch, "GROQ_API_KEY_2", "GROQ_API_KEY_3")  # no key 1, no OpenRouter
+    calls = []
+
+    def fake_llm(prompt, system=None, model=None, max_tokens=None, provider=None, **_):
+        calls.append((provider, model))
+        if provider == "groq2":
+            raise RuntimeError("groq2 HTTP 429: daily limit, please try again in 1h2m")  # too long to wait
+        return '{"what_happened": "checkout failed"}'
+    monkeypatch.setattr(agent.llm, "llm", fake_llm)
+    answer = agent.ask("worker", "sys", "explain", "what_happened")
+    assert [c[0] for c in calls] == ["groq2", "groq3"]  # key 1 and OpenRouter skipped: not set
+    assert all(model == "openai/gpt-oss-20b" for _, model in calls)
+    assert answer["_by"] == "openai/gpt-oss-20b"
+
+
+def test_prompts_dont_anchor_the_confidence_and_notes_carry_the_rules_check(tmp_path):
+    sent = []
+
+    def ask(role, system, prompt, need=None):
+        sent.append(prompt)
+        return fake_ask({"plan": PLAN, "worker": ANALYST, "fixer": FIXER, "final": FINAL})(role, system, prompt, need)
+    state = run_session(ask, tmp_path, budget=2)
+    assert not any('"confidence": 0.' in p for p in sent)  # the example used to say 0.6 and nemotron copied it
+    check = state["results"][0]["analysis"]["check"]
+    assert 0 <= check["pct"] <= 100 and check["checks"]
+    assert "Evidence check" in (tmp_path / "report.md").read_text(encoding="utf-8")
+
+
+def test_leftovers_the_planner_never_ranked_are_not_suggestions(tmp_path):
+    one = {"queue": [{"ids": ["cart-wipe"], "hypothesis": "carts live in memory", "predicted": "high"}]}
+    state = run_session(fake_ask({"plan": one, "worker": ANALYST, "fixer": FIXER, "final": FINAL}), tmp_path, budget=2)
+    suggested = {"+".join(n["ids"]) for n in state["next"]}
+    assert state["not_run"] and not set(state["not_run"]) & suggested
+    assert state["plan_blind"] is True  # replay: the planner saw no earlier ratings
