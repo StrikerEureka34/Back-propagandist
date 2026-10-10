@@ -14,7 +14,7 @@ Everything runs in a local Kubernetes cluster (kind) on one laptop.
  1 MAP      depmap.py ──────────────────────► console (app.py)
             │ risky targets
             ▼
- 2 PICK     experiments.toml ◄── a person picks (next: an AI ranks the menu)
+ 2 PICK     a person picks the pool ─► the planner (AI) orders it ─► a person approves each run
             │
             ▼
  3 BREAK    chaos.py ─► krknctl ─► krkn ─► kills a pod, or starts attacker / CPU-hog pods
@@ -34,7 +34,7 @@ Everything runs in a local Kubernetes cluster (kind) on one laptop.
 | Step | What happens | Who does it |
 |---|---|---|
 | 1 Map | Reads who calls whom from Jaeger traces, and how each service reaches the databases from its config. Flags the risky parts: no disk, many dependents. | us (`depmap.py`) |
-| 2 Pick | Choose a failure from a fixed menu. Each one carries its own stop limits. | a person (next: an AI ranks the menu using the map) |
+| 2 Pick | A person picks faults from the bank. The planner orders them by expected leverage, with a hypothesis each, and a person approves every run. An analyst explains each result as it comes in, and fixers propose one fix per root cause. | a person + the agent (`agent.py`) |
 | 3 Break | `chaos.py` starts `krknctl`, which runs krkn in its own container. krkn talks to Kubernetes and kills a pod, or starts attacker or CPU-hog pods. | krkn |
 | 4 Watch | Every second, one test request to the shop, like a customer would make, plus a check that no other pod broke. | us (`chaos.py`) |
 | 5 Stop | Too slow, too many errors, another pod down, running too long, or a person says stop: kill krkn, remove its pods. | us (`chaos.py`) |
@@ -111,6 +111,8 @@ uv run python chaos.py list            # the failure menu
 uv run python chaos.py run traffic-spike
 uv run python bank.py run all          # rate every fault (~3-5 min each)
 uv run python bank.py show             # the fault bank, by tier
+uv run python agent.py --replay bank.json --auto-approve   # the agent over recorded ratings, no cluster
+uv run python agent.py --pool blast-loss,cart-wipe --budget 8   # live: you approve every run
 uv run pytest -q                       # tests (Linux)
 ```
 
@@ -121,7 +123,10 @@ Prometheus: http://localhost:9090.
 
 ```
 app.py              the console (Streamlit): dependency map, risk table
-pages/              console pages: Live run (shop health, per-service damage, the bank)
+pages/              console pages: Live run (shop health, per-service damage, the bank),
+                    Agent (pick faults, approve each run, results ranked by leverage)
+agent.py            the agent: planner + sub-agents (LangGraph), you approve every run
+judge.py            the rules: leverage, resilience score, root causes, safe pairs
 depmap.py           builds the dependency map and the risk flags
 chaos.py            runs a krkn experiment, watches it, stops it, cleans up
 bank.py, bank.json  rates each fault high / medium / low from measured effects
