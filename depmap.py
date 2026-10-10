@@ -3,6 +3,7 @@ traces) from Kubernetes env vars, with the risk flags the AI planner ranks exper
 
     uv run python depmap.py          # DOT for st.graphviz_chart
     uv run python depmap.py --json   # nodes + edges for plan.py
+    uv run python depmap.py --check  # found / missing / extra vs the official diagram
 """
 
 import json
@@ -56,6 +57,14 @@ def build(jaeger_deps: list[dict], workloads: dict) -> dict:
             "edges": [{"from": s, "to": d, **e} for (s, d), e in sorted(edges.items())]}
 
 
+def coverage(graph: dict, documented: list[list[str]]) -> dict:
+    """Compare discovered edges with the official architecture diagram (docs/official_edges.json)."""
+    ours = {(e["from"], e["to"]) for e in graph["edges"]}
+    docs = {(a, b) for a, b in documented}
+    return {"found": sorted(map(list, docs & ours)), "missing": sorted(map(list, docs - ours)),
+            "extra": sorted(map(list, ours - docs))}
+
+
 def to_dot(graph: dict) -> str:
     lines = ["digraph deps {", "  rankdir=LR;"]
     for name, n in graph["nodes"].items():
@@ -82,4 +91,10 @@ def fetch(shop: str = "http://localhost:8080", namespace: str = "otel-demo",
 
 if __name__ == "__main__":
     g = build(*fetch())
-    print(json.dumps(g, indent=1) if "--json" in sys.argv else to_dot(g))
+    if "--check" in sys.argv:
+        with open("docs/official_edges.json") as f:
+            c = coverage(g, json.load(f)["edges"])
+        for k in ("found", "missing", "extra"):
+            print(f"{k} ({len(c[k])}): " + ", ".join(f"{a}->{b}" for a, b in c[k]))
+    else:
+        print(json.dumps(g, indent=1) if "--json" in sys.argv else to_dot(g))

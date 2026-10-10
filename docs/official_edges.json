@@ -1,0 +1,18 @@
+{
+ "_source": "Service Diagram (Mermaid) in open-telemetry/opentelemetry.io content/en/docs/demo/architecture.md. Renamed cache->valkey-cart, queue->kafka, postgresql->astronomy-db; queue->consumer edges flipped to dependency direction (consumer->kafka); Internet and react-native-app dropped (outside the cluster).",
+ "edges": [
+  ["chatbot", "agent"], ["agent", "frontend"], ["agent", "mcp"], ["mcp", "frontend"],
+  ["ad", "flagd"], ["cart", "flagd"], ["fraud-detection", "flagd"], ["payment", "flagd"],
+  ["recommendation", "flagd"], ["frontend-proxy", "flagd"],
+  ["checkout", "currency"], ["checkout", "cart"], ["checkout", "payment"], ["checkout", "email"],
+  ["checkout", "kafka"], ["checkout", "product-catalog"], ["checkout", "shipping"],
+  ["shipping", "quote"], ["cart", "valkey-cart"],
+  ["frontend", "ad"], ["frontend", "cart"], ["frontend", "currency"], ["frontend", "checkout"],
+  ["frontend", "shipping"], ["frontend", "product-catalog"], ["frontend", "recommendation"],
+  ["frontend-proxy", "flagd-ui"], ["frontend-proxy", "image-provider"],
+  ["frontend-proxy", "frontend"], ["frontend-proxy", "chatbot"],
+  ["recommendation", "product-catalog"], ["product-catalog", "astronomy-db"],
+  ["accounting", "astronomy-db"], ["fraud-detection", "kafka"], ["accounting", "kafka"],
+  ["load-generator", "frontend-proxy"]
+ ]
+}

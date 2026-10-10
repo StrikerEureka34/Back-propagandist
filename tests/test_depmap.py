@@ -54,6 +54,17 @@ def test_risk_flags():
     assert "single-replica" in nodes["payment"]["flags"]
 
 
+def test_coverage_against_official_diagram():
+    documented = json.loads((Path(__file__).parent.parent / "docs" / "official_edges.json")
+                            .read_text())["edges"]
+    c = depmap.coverage(graph(), documented)
+    assert ["checkout", "kafka"] in c["found"]          # env edge counts
+    assert ["frontend", "product-catalog"] in c["found"]
+    assert ["frontend-proxy", "flagd-ui"] in c["missing"]  # never called in the window
+    assert ["checkout", "flagd"] in c["extra"]          # real, but not in the diagram
+    assert len(c["found"]) + len(c["missing"]) == len(documented)
+
+
 def test_dot_marks_stores_and_env_edges():
     dot = depmap.to_dot(graph())
     assert dot.startswith("digraph")
