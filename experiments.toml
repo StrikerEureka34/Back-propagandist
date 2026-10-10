@@ -33,9 +33,12 @@ chaos-duration = "120s"
 namespace = "otel-demo"
 number-of-pods = 2
 [experiment.abort_if]
-error_rate = 0.3
-p95_ms = 250 # baseline is ~5-15 ms; 250 ms is a shop 20x slower
-max_s = 240
+# Automatic kill switch effectively OFF here: a fault that runs its full course, no threshold stop.
+# Still active: blast radius (another pod goes NotReady), runs/STOP, Ctrl+C.
+# To turn it back on, use the values in the comments.
+error_rate = 1.0 # on: 0.3
+p95_ms = 100000 # on: 250 (baseline is ~5-15 ms; 250 ms is a shop 20x slower)
+max_s = 3600 # on: 240
 
 [[experiment]]
 id = "cpu-starve"
