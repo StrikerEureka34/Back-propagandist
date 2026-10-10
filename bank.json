@@ -603,19 +603,14 @@
     "tier": "high",
     "effects": [
       {
-        "kind": "latency",
-        "service": "agent",
-        "what": "agent p95 195 -> 760 ms"
-      },
-      {
         "kind": "errors",
         "service": "checkout",
-        "what": "checkout errors 0% -> 58% (11/19 calls)"
+        "what": "checkout errors 0% -> 59% (10/17 calls)"
       },
       {
         "kind": "errors",
         "service": "shipping",
-        "what": "shipping errors 0% -> 52% (41/79 calls)"
+        "what": "shipping errors 0% -> 69% (56/81 calls)"
       }
     ],
     "fault": "quote answers 200 OK with a body that isn't a quote",
@@ -626,26 +621,27 @@
     },
     "recovery_s": 0.0,
     "shop": {
-      "probes": 244,
+      "probes": 176,
       "failed": 0,
       "p95_ms": 7,
       "max_ms": 12
     },
-    "baseline_p95_ms": 5,
-    "measured_at": "2026-10-10T18:04:09+00:00",
+    "baseline_p95_ms": 4,
+    "measured_at": "2026-10-10T21:18:35+00:00",
     "windows": {
       "baseline": [
-        1791654835,
-        1791655135
+        1791666574,
+        1791666874
       ],
       "fault": [
-        1791655140,
-        1791655444
+        1791666875,
+        1791667111
       ]
     },
-    "fault_ended_at": 1791655384.0,
+    "fault_ended_at": 1791667050.7,
     "recovered_s": 150,
-    "recovery_checked_s": 900
+    "recovery_checked_s": 155,
+    "recovery_live": true
   },
   "blast-latency+catalog-kill": {
     "tier": "medium",
@@ -725,6 +721,187 @@
     "fault_ended_at": 1791664755.5,
     "recovered_s": 150,
     "recovery_checked_s": 155,
+    "recovery_live": true
+  },
+  "blast-latency+catalog-db-cutoff": {
+    "tier": "high",
+    "effects": [
+      {
+        "kind": "kill-switch",
+        "what": "error_rate: 3/3 probes failed in last 5s, limit 50%"
+      },
+      {
+        "kind": "no-recovery",
+        "what": "shop not healthy 120 s after the fault"
+      },
+      {
+        "kind": "latency",
+        "service": "agent",
+        "what": "agent p95 389 -> 1320 ms"
+      },
+      {
+        "kind": "latency",
+        "service": "checkout",
+        "what": "checkout p95 48 -> 1948 ms"
+      },
+      {
+        "kind": "latency",
+        "service": "email",
+        "what": "email p95 6 -> 390 ms"
+      },
+      {
+        "kind": "latency",
+        "service": "frontend",
+        "what": "frontend p95 40 -> 1200 ms"
+      },
+      {
+        "kind": "latency",
+        "service": "frontend-proxy",
+        "what": "frontend-proxy p95 36 -> 1244 ms"
+      },
+      {
+        "kind": "latency",
+        "service": "product-catalog",
+        "what": "product-catalog p95 28 -> 766 ms"
+      },
+      {
+        "kind": "latency",
+        "service": "shipping",
+        "what": "shipping p95 4 -> 388 ms"
+      },
+      {
+        "kind": "cpu",
+        "service": "ad",
+        "what": "ad CPU 0.01 -> 0.28 cores"
+      },
+      {
+        "kind": "restart",
+        "what": "pod ad-6667d5966-68v2k restarted 1x"
+      }
+    ],
+    "fault": "+200 ms on everything leaving the backend node + product catalog loses its Postgres database (egress :5432 dropped)",
+    "scenario": "node-network-chaos+pod-network-filter",
+    "params": {
+      "blast-latency": {
+        "node-name": "chaos-worker",
+        "latency": "200ms",
+        "loss": "0",
+        "bandwidth": "10gbit",
+        "test-duration": 120
+      },
+      "catalog-db-cutoff": {
+        "chaos-duration": 120,
+        "namespace": "otel-demo",
+        "pod-selector": "opentelemetry.io/name=product-catalog",
+        "ingress": "false",
+        "egress": "true",
+        "ports": 5432
+      }
+    },
+    "recovery_s": null,
+    "shop": {
+      "probes": 38,
+      "failed": 3,
+      "p95_ms": 2000,
+      "max_ms": 2000
+    },
+    "baseline_p95_ms": 5,
+    "measured_at": "2026-10-10T21:27:13+00:00",
+    "windows": {
+      "baseline": [
+        1791667255,
+        1791667405
+      ],
+      "fault": [
+        1791667406,
+        1791667629
+      ]
+    },
+    "fault_ended_at": 1791667448.7,
+    "recovered_s": 810,
+    "recovery_checked_s": 815,
+    "recovery_live": true
+  },
+  "cart-wipe+traffic-spike": {
+    "tier": "high",
+    "effects": [
+      {
+        "kind": "kill-switch",
+        "what": "error_rate: 2/3 probes failed in last 5s, limit 50%"
+      },
+      {
+        "kind": "data-loss",
+        "what": "cart items 1 -> 0"
+      },
+      {
+        "kind": "latency",
+        "service": "frontend",
+        "what": "frontend p95 35 -> 785 ms"
+      },
+      {
+        "kind": "latency",
+        "service": "frontend-proxy",
+        "what": "frontend-proxy p95 32 -> 942 ms"
+      },
+      {
+        "kind": "cpu",
+        "service": "astronomy-db",
+        "what": "astronomy-db CPU 0.01 -> 0.53 cores"
+      },
+      {
+        "kind": "cpu",
+        "service": "frontend",
+        "what": "frontend CPU 0.04 -> 0.39 cores"
+      },
+      {
+        "kind": "cpu",
+        "service": "product-catalog",
+        "what": "product-catalog CPU 0.07 -> 0.72 cores"
+      }
+    ],
+    "fault": "cart store (valkey-cart) pod killed; it has no volume + http-load",
+    "scenario": "pod-scenarios+http-load",
+    "params": {
+      "cart-wipe": {
+        "namespace": "^otel-demo$",
+        "pod-label": "opentelemetry.io/name=valkey-cart",
+        "disruption-count": 1,
+        "expected-recovery-time": 120
+      },
+      "traffic-spike": {
+        "target-endpoints": "GET http://frontend-proxy.otel-demo:8080/;GET http://frontend-proxy.otel-demo:8080/api/products",
+        "rate": "1000/1s",
+        "chaos-duration": "120s",
+        "namespace": "otel-demo",
+        "number-of-pods": 2
+      }
+    },
+    "recovery_s": 0.9,
+    "shop": {
+      "probes": 94,
+      "failed": 3,
+      "p95_ms": 834,
+      "max_ms": 2000,
+      "cart_items": {
+        "before": 1,
+        "after": 0
+      }
+    },
+    "baseline_p95_ms": 5,
+    "measured_at": "2026-10-10T21:47:15+00:00",
+    "windows": {
+      "baseline": [
+        1791668519,
+        1791668669
+      ],
+      "fault": [
+        1791668670,
+        1791668830
+      ]
+    },
+    "fault_ended_at": 1791668769.0,
+    "recovered_s": 210,
+    "recovery_checked_s": 215,
     "recovery_live": true
   }
 }
