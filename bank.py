@@ -287,7 +287,7 @@ if __name__ == "__main__":
         t0 = time.time()
         baseline = window(t0 - BASELINE_S, t0)
         for exp_id in ids:
-            url = next(e for e in chaos.load_experiments() if e["id"] == exp_id)["probe_url"]
+            url = chaos.combined(chaos.find(exp_id))["probe_url"]  # a pair "a+b" too
             if not wait_healthy(url):
                 sys.exit(f"shop still unhealthy 5 min after the last fault; stopping before {exp_id}")
             measure(exp_id, baseline)
