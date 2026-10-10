@@ -165,6 +165,41 @@ p95_ms = 2000
 max_s = 360
 
 [[experiment]]
+id = "shipping-ship-errors"
+scenario = "service-hijacking"
+target = "opentelemetry.io/name=shipping"
+service = "shipping" # chaos.py restores this Service's selector if the run is cut short
+# Same unsigned krkn-service-hijacking image as quote-garbage (approved 2026-10-10 for that fault);
+# extended to this one 2026-10-11 when the user asked for it as a bank candidate (#14).
+probe_url = "http://localhost:8080/api/products"
+note = "shipping quotes fine but every ship-order fails (500), after the card is charged"
+[experiment.params]
+scenario-file-path = "scenarios/shipping-ship-errors.yaml"
+disable-image-signature = "true"
+[experiment.abort_if]
+error_rate = 0.5
+p95_ms = 2000
+max_s = 360
+
+[[experiment]]
+id = "currency-down"
+scenario = "pod-network-filter"
+target = "opentelemetry.io/name=currency"
+probe_url = "http://localhost:8080/api/products"
+note = "nothing can reach currency (ingress :8080 dropped): non-USD prices and checkout"
+[experiment.params]
+chaos-duration = 120
+namespace = "otel-demo"
+pod-selector = "opentelemetry.io/name=currency"
+ingress = "true"
+egress = "false"
+ports = 8080
+[experiment.abort_if]
+error_rate = 0.5
+p95_ms = 2000
+max_s = 360
+
+[[experiment]]
 id = "blast-latency"
 scenario = "node-network-chaos"
 target = "node:chaos-worker"

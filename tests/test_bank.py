@@ -124,9 +124,11 @@ def test_windows_are_never_shorter_than_two_samples():
     assert bank.MIN_WINDOW_S >= 2 * bank.SCRAPE_S
 
 
-def test_only_quote_garbage_skips_the_workload_signature_check():
+def test_only_the_two_approved_hijacks_skip_the_workload_signature_check():
+    # approved per experiment: quote-garbage 2026-10-10, shipping-ship-errors 2026-10-11
     exps = chaos.load_experiments()
-    assert [e["id"] for e in exps if "disable-image-signature" in e.get("params", {})] == ["quote-garbage"]
+    assert [e["id"] for e in exps if "disable-image-signature" in e.get("params", {})] == [
+        "quote-garbage", "shipping-ship-errors"]
     cmd = chaos.krkn_command(next(e for e in exps if e["id"] == "quote-garbage"))
     assert cmd[cmd.index("--disable-image-signature") + 1] == "true"
     assert all("--run-unsigned-images" not in chaos.krkn_command(e) for e in exps if e["scenario"] != "flagd")
