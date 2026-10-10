@@ -40,8 +40,8 @@ Check `docker kubectl helm jq curl kind krknctl` with `command -v`. If any are m
 - Ask the user to run `! sudo pacman -S --needed docker kubectl helm jq curl`,
   `! sudo systemctl enable --now docker` and `! sudo usermod -aG docker $USER`.
   After the last one they must log out and back in.
-- kind: `mkdir -p ~/.local/bin && curl -Lo ~/.local/bin/kind https://github.com/kubernetes-sigs/kind/releases/latest/download/kind-linux-amd64 && chmod +x ~/.local/bin/kind`
-- krknctl: `tag=$(curl -s https://api.github.com/repos/krkn-chaos/krknctl/releases/latest | jq -r .tag_name) && curl -L "https://krkn-chaos.gateway.scarf.sh/krknctl-${tag}-linux-amd64.tar.gz" | tar -xz -C ~/.local/bin krknctl`
+- kind (pinned to the version that passed): `mkdir -p ~/.local/bin && curl -Lo ~/.local/bin/kind https://github.com/kubernetes-sigs/kind/releases/download/v0.33.0/kind-linux-amd64 && chmod +x ~/.local/bin/kind`
+- krknctl (pinned): `tag=v0.14.2-beta && curl -L "https://krkn-chaos.gateway.scarf.sh/krknctl-${tag}-linux-amd64.tar.gz" | tar -xz -C ~/.local/bin krknctl`
 - `~/.local/bin` must be on `PATH`. Confirm the daemon runs: `docker info`.
 - If `sysctl -n fs.inotify.max_user_instances` is below 512, ask the user to run
   `! sudo sysctl fs.inotify.max_user_watches=524288 fs.inotify.max_user_instances=512`.
@@ -55,7 +55,7 @@ kubectl config use-context kind-chaos
 helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts
 helm repo update open-telemetry
 helm status otel -n otel-demo >/dev/null 2>&1 || \
-  helm install otel open-telemetry/opentelemetry-demo -n otel-demo --create-namespace \
+  helm install otel open-telemetry/opentelemetry-demo --version 0.42.3 -n otel-demo --create-namespace \
     -f k8s/otel-values.yaml --wait --timeout 20m
 ```
 Image pulls take most of the time. Pull the two krkn images in the background meanwhile:
@@ -93,7 +93,7 @@ First check the label selects a pod:
 `--show-labels` to find the right one.
 ```bash
 before=$(kubectl get pods -n otel-demo -l opentelemetry.io/name=payment -o jsonpath='{.items[0].metadata.name}')
-krknctl run pod-scenarios --kubeconfig ~/.kube/config --namespace '^otel-demo$' \
+krknctl run pod-scenarios --kubeconfig ~/.kube/config --wait-duration 1 --namespace '^otel-demo$' \
   --pod-label 'opentelemetry.io/name=payment' --disruption-count 1 \
   --expected-recovery-time 120 2>&1 | tee evidence/g3-krkn.log
 echo "krknctl exit ${PIPESTATUS[0]}"
@@ -112,7 +112,7 @@ Run this as one block:
 ```bash
 ( while true; do echo "$(date +%s) $(curl -s -o /dev/null -m 5 -w '%{http_code} %{time_total}' localhost:8080/api/products)"; sleep 1; done ) > evidence/g4-probe.log &
 PROBE=$!; sleep 10
-krknctl run pod-network-filter --kubeconfig ~/.kube/config --namespace otel-demo \
+krknctl run pod-network-filter --kubeconfig ~/.kube/config --wait-duration 1 --namespace otel-demo \
   --pod-selector 'opentelemetry.io/name=product-catalog' \
   --ingress false --egress true --ports 5432 --chaos-duration 60 2>&1 | tee evidence/g4-krkn.log
 echo "krknctl exit ${PIPESTATUS[0]}"
