@@ -119,3 +119,27 @@ def test_krkn_command_always_waits_1s_and_points_at_prometheus():
     assert cmd[:3] == ["krknctl", "run", "http-load"]
     assert cmd[cmd.index("--wait-duration") + 1] == "1"
     assert cmd[cmd.index("--prometheus-url") + 1] == "http://localhost:9090"
+
+
+def test_network_target_is_replaced_only_when_the_run_was_aborted(monkeypatch):
+    calls = []
+    monkeypatch.setattr(chaos, "sh", lambda *cmd: calls.append(cmd) or "")
+    monkeypatch.setattr(chaos, "pods", lambda: {"rec-1": {"labels": {"app": "rec"}, "ready": True, "done": False}})
+    exp = {"scenario": "pod-network-filter", "target": "app=rec"}
+    cleanup = chaos.cleanup_fn(exp, {"rec-1": {}}, set())
+    cleanup(aborted=False)
+    assert not any(c[:3] == ("kubectl", "delete", "pod") for c in calls)
+    cleanup()
+    assert ("kubectl", "delete", "pod", "rec-1", "-n", chaos.NS, "--wait=false") in calls
+
+
+def test_krkn_failed_catches_a_broken_tc_command_that_krkn_still_calls_pass():
+    log = ("[WARNING] tc command returned output (may be a warning): tc qdisc add dev eth0 parent 100:1 "
+           "handle 101: netem delay 200ms loss % — Unknown\n    Exit Status           : PASS (0)\n")
+    assert chaos.krkn_failed(log, aborted=False, returncode=0)
+    assert not chaos.krkn_failed("    Exit Status           : PASS (0)\n", aborted=False, returncode=0)
+    harmless = ("[WARNING] tc command returned output (may be a warning): tc class add dev eth0 parent 100: "
+                "classid 100:1 htb rate 10gbit — Warning: sch_htb: quantum of class 1000001 is big.\n")
+    assert not chaos.krkn_failed(harmless, aborted=False, returncode=0)
+    assert chaos.krkn_failed("    Exit Status           : FAIL (1)\n", aborted=False, returncode=1)
+    assert not chaos.krkn_failed("", aborted=True, returncode=-9)  # killed by our own kill switch

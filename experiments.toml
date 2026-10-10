@@ -11,6 +11,7 @@ scenario = "pod-scenarios"
 target = "opentelemetry.io/name=valkey-cart"
 probe_url = "http://localhost:8080/api/products"
 impact = "cart" # add a cart item before, read it back after
+note = "cart store (valkey-cart) pod killed; it has no volume"
 [experiment.params]
 namespace = "^otel-demo$"
 pod-label = "opentelemetry.io/name=valkey-cart"
@@ -45,6 +46,7 @@ id = "cpu-starve"
 scenario = "node-cpu-hog"
 target = "node:chaos-worker"
 probe_url = "http://localhost:8080/api/products"
+note = "100 % CPU hog on the backend node"
 [experiment.params]
 chaos-duration = 60
 cpu-percentage = 100
@@ -61,6 +63,7 @@ id = "kafka-outage"
 scenario = "pod-scenarios"
 target = "opentelemetry.io/name=kafka"
 probe_url = "http://localhost:8080/api/products"
+note = "kafka pod killed"
 [experiment.params]
 namespace = "^otel-demo$"
 pod-label = "opentelemetry.io/name=kafka"
@@ -148,10 +151,14 @@ id = "quote-garbage"
 scenario = "service-hijacking"
 target = "opentelemetry.io/name=quote"
 service = "quote" # chaos.py restores this Service's selector if the run is cut short
+# krkn-chaos never signed krkn-service-hijacking (no cosign signature on quay for any tag), so krkn
+# refuses to deploy it. disable-image-signature (below) skips that check for this experiment's workload
+# image only; krknctl still verifies krkn's own scenario image. Approved 2026-10-10.
 probe_url = "http://localhost:8080/api/products"
 note = "quote answers 200 OK with a body that isn't a quote"
 [experiment.params]
 scenario-file-path = "scenarios/quote-garbage.yaml"
+disable-image-signature = "true"
 [experiment.abort_if]
 error_rate = 0.5
 p95_ms = 2000
@@ -164,8 +171,12 @@ target = "node:chaos-worker"
 probe_url = "http://localhost:8080/api/products"
 note = "+200 ms on everything leaving the backend node"
 [experiment.params]
+# krkn builds `tc ... htb rate <bandwidth>` and `netem delay <latency> loss <loss>%` from all three,
+# so an unset one leaves a broken tc command that krkn only warns about, then exits PASS.
 node-name = "chaos-worker"
 latency = "200ms"
+loss = "0"
+bandwidth = "10gbit" # far above anything kind moves, so it never shapes traffic itself
 test-duration = 120
 [experiment.abort_if]
 error_rate = 0.5
@@ -179,8 +190,12 @@ target = "node:chaos-worker"
 probe_url = "http://localhost:8080/api/products"
 note = "10 % packet loss on everything leaving the backend node"
 [experiment.params]
+# krkn builds `tc ... htb rate <bandwidth>` and `netem delay <latency> loss <loss>%` from all three,
+# so an unset one leaves a broken tc command that krkn only warns about, then exits PASS.
 node-name = "chaos-worker"
-loss = "10%"
+latency = "0ms"
+loss = "10" # krkn wants a bare number: "10%" fails its config validation
+bandwidth = "10gbit" # far above anything kind moves, so it never shapes traffic itself
 test-duration = 120
 [experiment.abort_if]
 error_rate = 0.5

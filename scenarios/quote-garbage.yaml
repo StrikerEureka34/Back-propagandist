@@ -11,6 +11,7 @@ plan:
   - resource: "/getquote"
     steps:
       POST:
-        - status: 200
+        - duration: 120 # krkn's schema requires it on every step
+          status: 200
           mime_type: "application/json"
           payload: '{"oops": "not a number"}'

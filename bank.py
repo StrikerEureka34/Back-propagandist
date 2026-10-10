@@ -11,8 +11,12 @@ known-answer control: a different tier means the measurement is broken, not the 
 
 Tiers:
   high    kill switch tripped, >= 10 % shop probes failed, a customer-facing service
-          (frontend, frontend-proxy, checkout) erroring, cart data lost, or no recovery
-  medium  another service erroring, a customer-facing service 2x slower, or a pod restarted
+          (frontend, frontend-proxy, checkout) erroring or serving half its usual traffic,
+          cart data lost, or no recovery
+  medium  another service erroring or starved of traffic, a customer-facing service 2x slower,
+          or a pod restarted
+
+The fault window runs until the shop is healthy again (damage often outlasts the fault).
   low     anything less: internal slowness, CPU / memory strain, or no detectable effect
 """
 
@@ -29,11 +33,16 @@ import chaos
 BANK = chaos.ROOT / "bank.json"
 CUSTOMER_FACING = {"frontend", "frontend-proxy", "checkout"}
 SCRAPE_S = 60  # span metrics reach Prometheus once a minute; cAdvisor is scraped once a minute
+# A rate needs two samples inside the window: with one a minute, anything shorter can come back
+# empty (catalog-kill, 90 s window: frontend read "0 req/s" while serving ~20 req/s).
+MIN_WINDOW_S = 2 * SCRAPE_S + 30
 BASELINE_S = 300
 ERR = 0.05  # error ratio that counts as erroring...
 MIN_ERRORS = 2  # ...with at least 2 errors, so 1 failed checkout out of 3 isn't "33 %"
 SLOW = 2.0  # p95 at least 2x the baseline...
 SLOW_MS = 50  # ...and at least 50 ms worse
+STARVED = 0.5  # serving half its usual requests/s or less...
+MIN_RPS = 0.5  # ...when it usually serves at least this much, so a quiet service isn't "starved"
 CPU = 2.0, 0.2  # 2x the baseline and +0.2 cores
 MEM = 1.5, 100 * 2**20  # 1.5x the baseline and +100 MiB
 SPANS = 'span_kind=~"SPAN_KIND_SERVER|SPAN_KIND_CONSUMER"'
@@ -49,14 +58,17 @@ def prom(query: str, at: float, key: str) -> dict[str, float]:
 
 def window(start: float, end: float) -> dict:
     """What every service and container did over [start, end]."""
-    w, at = f"{max(round(end - start), SCRAPE_S)}s", end
+    secs = max(end - start, MIN_WINDOW_S)
+    w, at = f"{round(secs)}s", end
     calls = prom(f"sum by (service_name) (increase(traces_span_metrics_calls_total{{{SPANS}}}[{w}]))", at, "service_name")
     errors = prom(f'sum by (service_name) (increase(traces_span_metrics_calls_total{{{SPANS},status_code="STATUS_CODE_ERROR"}}[{w}]))', at, "service_name")
     p95 = prom(f"histogram_quantile(0.95, sum by (service_name, le) (increase(traces_span_metrics_duration_milliseconds_bucket{{{SPANS}}}[{w}])))", at, "service_name")
     pods = f'namespace="{chaos.NS}",container!="",container!="POD"'
     return {
-        "services": {s: {"calls": round(c), "errors": round(errors.get(s, 0)), "p95_ms": round(p95[s]) if s in p95 else None}
-                     for s, c in calls.items() if c >= 1},
+        "span": [round(start), round(end)],
+        "services": {s: {"calls": round(c), "rps": round(c / secs, 2), "errors": round(errors.get(s, 0)),
+                         "p95_ms": round(p95[s]) if s in p95 else None}
+                     for s, c in calls.items()},  # 0 calls is real silence; absent = no data
         "cpu": prom(f"sum by (container) (rate(container_cpu_usage_seconds_total{{{pods}}}[{w}]))", at, "container"),
         "mem": prom(f"max by (container) (max_over_time(container_memory_working_set_bytes{{{pods}}}[{w}]))", at, "container"),
     }
@@ -76,11 +88,19 @@ def effects(before: dict, during: dict, pods_before: dict, pods_after: dict, sum
     if cart and cart["after"] < cart["before"]:
         out.append({"kind": "data-loss", "what": f"cart items {cart['before']} -> {cart['after']}"})
     if summary["recovery_s"] is None:
-        out.append({"kind": "no-recovery", "what": f"shop not healthy {chaos.RECOVER_TIMEOUT_S}s after the fault"})
+        out.append({"kind": "no-recovery", "what": f"shop not healthy {chaos.RECOVER_TIMEOUT_S} s after the fault"})
+    target_svc = target.partition("=")[2]
+    for svc, b in sorted(before["services"].items()):
+        # a service nobody can reach serves nothing: that's the fault on the target, damage elsewhere.
+        # Absent from the fault window means no data, not zero traffic.
+        d = during["services"].get(svc)
+        d_rps = d["rps"] if d else None
+        if d and svc != target_svc and b.get("rps", 0) >= MIN_RPS and d_rps <= STARVED * b["rps"]:
+            out.append({"kind": "throughput", "service": svc, "what": f"{svc} served {b['rps']} -> {d_rps} req/s"})
     for svc, d in sorted(during["services"].items()):
         b = before["services"].get(svc, {"calls": 0, "errors": 0, "p95_ms": None})
         was = b["errors"] / b["calls"] if b["calls"] else 0.0
-        now = d["errors"] / d["calls"]
+        now = d["errors"] / d["calls"] if d["calls"] else 0.0
         if d["errors"] >= MIN_ERRORS and now >= ERR and now >= 2 * was:
             out.append({"kind": "errors", "service": svc,
                         "what": f"{svc} errors {was:.0%} -> {now:.0%} ({d['errors']}/{d['calls']} calls)"})
@@ -108,11 +128,23 @@ def effects(before: dict, during: dict, pods_before: dict, pods_after: dict, sum
 def tier(effs: list[dict]) -> str:
     kinds = {e["kind"] for e in effs}
     customer = {e["kind"] for e in effs if e.get("service") in CUSTOMER_FACING}
-    if kinds & {"kill-switch", "shop-down", "data-loss", "no-recovery"} or "errors" in customer:
+    if kinds & {"kill-switch", "shop-down", "data-loss", "no-recovery"} or customer & {"errors", "throughput"}:
         return "high"
-    if kinds & {"errors", "restart", "pod-replaced"} or "latency" in customer:
+    if kinds & {"errors", "throughput", "restart", "pod-replaced"} or "latency" in customer:
         return "medium"
     return "low"
+
+
+def wait_healthy(url: str, streak: int = 5, timeout_s: int = 300) -> bool:
+    """Before the next fault: the last one's damage may still be healing (catalog-kill took ~3 min)."""
+    t0, ok_in_a_row = time.monotonic(), 0
+    while time.monotonic() - t0 < timeout_s:
+        ok, _ = chaos.probe_once(url)
+        ok_in_a_row = ok_in_a_row + 1 if ok else 0
+        if ok_in_a_row >= streak:
+            return True
+        time.sleep(1)
+    return False
 
 
 def load() -> dict:
@@ -128,15 +160,19 @@ def measure(exp_id: str, baseline: dict) -> dict:
     if summary["krkn_failed"]:  # nothing was injected: rating it would bank a false "low"
         print(f"{exp_id}: krkn failed, not rated. See runs/{exp_id}/krknctl.log")
         return {}
-    # the last minute of the fault reaches Prometheus up to SCRAPE_S late
-    time.sleep(max(0.0, summary["ended_at"] + SCRAPE_S + 5 - time.time()))
-    during = window(summary["started_at"], summary["ended_at"] + SCRAPE_S)
+    # Damage can outlast the fault (catalog-kill: pod back in seconds, shop broken ~3 min), so the
+    # window runs until the shop recovered, plus SCRAPE_S because span metrics arrive a minute late.
+    settle = summary["recovery_s"] if summary["recovery_s"] is not None else chaos.RECOVER_TIMEOUT_S
+    end = summary["ended_at"] + settle + SCRAPE_S
+    time.sleep(max(0.0, end + 5 - time.time()))
+    during = window(summary["started_at"], end)
     effs = effects(baseline, during, pods_before, chaos.pods(), summary, exp["target"])
     entry = {
         "tier": tier(effs), "effects": effs,
         "fault": exp.get("note") or exp["scenario"], "scenario": exp["scenario"], "params": exp["params"],
         "recovery_s": summary["recovery_s"], "shop": summary["impact"], "baseline_p95_ms": summary["baseline_p95_ms"],
         "measured_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "windows": {"baseline": baseline["span"], "fault": during["span"]},  # epoch s, to re-check in Grafana
     }
     if "expect" in exp:
         entry["control"] = {"expected": exp["expect"], "pass": entry["tier"] == exp["expect"]}
@@ -174,6 +210,9 @@ if __name__ == "__main__":
         t0 = time.time()
         baseline = window(t0 - BASELINE_S, t0)
         for exp_id in ids:
+            url = next(e for e in chaos.load_experiments() if e["id"] == exp_id)["probe_url"]
+            if not wait_healthy(url):
+                sys.exit(f"shop still unhealthy 5 min after the last fault; stopping before {exp_id}")
             measure(exp_id, baseline)
     else:
         sys.exit(__doc__)

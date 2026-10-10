@@ -185,7 +185,7 @@ def blast_radius(target: str, before: dict):
 
 
 def cleanup_fn(exp: dict, pods_before: dict, containers_before: set):
-    def cleanup():
+    def cleanup(aborted: bool = True):
         if exp["scenario"] == "flagd":  # the fault lives in flagd: switching the flag off ends it
             set_flag(exp["params"]["flag"], "off")
             return
@@ -201,7 +201,10 @@ def cleanup_fn(exp: dict, pods_before: dict, containers_before: set):
             key, _, value = exp["target"].partition("=")
             patch = json.dumps([{"op": "replace", "path": "/spec/selector", "value": {key: value}}])
             sh("kubectl", "patch", "svc", exp["service"], "-n", NS, "--type=json", "-p", patch)
-        if "network" in exp["scenario"]:  # a network fault lives in the target: replace it
+        # A network fault krkn was killed mid-way leaves its rules in the target: replace it. Not after
+        # a clean finish (krkn removed them): replacing a pod whose callers' connections were black-holed
+        # strands them on a dead IP until TCP gives up, ~15 min (recommendation-cutoff, 2026-10-10).
+        if aborted and "network" in exp["scenario"]:
             for name, p in pods().items():
                 if is_target(exp["target"], p):
                     sh("kubectl", "delete", "pod", name, "-n", NS, "--wait=false")
@@ -217,6 +220,15 @@ def cart_add(user: str):
 def cart_items(user: str) -> int:
     with urllib.request.urlopen(f"{SHOP}/api/cart?sessionId={user}&currencyCode=USD", timeout=10) as r:
         return len(json.load(r).get("items", []))
+
+
+def krkn_failed(log_text: str, aborted: bool, returncode: int | None) -> bool:
+    """True when krkn injected nothing. Its exit status isn't enough: node-network-chaos with a broken
+    tc command only warns ("tc command returned output") and still exits PASS (blast-latency, 2026-10-10)."""
+    # Real tc errors only: with any bandwidth set, tc also prints a harmless "quantum ... is big" warning.
+    tc_error = re.search(r"tc command returned output.*(not complete|Illegal|Unknown|Error)", log_text)
+    return (bool(re.search(r"Exit Status\s*:\s*FAIL", log_text)) or bool(tc_error)
+            or (not aborted and returncode != 0))
 
 
 def wait_recovered(url: str, baseline_p95: float, log) -> float | None:
@@ -287,7 +299,7 @@ def run(exp_id: str) -> dict:
                        cleanup, stop_file=stop_file, log=log, info=info)
     ended = time.monotonic()
     if not reason:
-        cleanup()  # finished by itself: still remove krkn's leftovers
+        cleanup(aborted=False)  # finished by itself: still remove krkn's leftovers
     krkn_log.close()
     recovery_s = wait_recovered(url, baseline_p95, log)
 
@@ -303,7 +315,7 @@ def run(exp_id: str) -> dict:
                    "p95_ms": round(p95_ms(probes)), "max_ms": round(max((p[2] for p in probes), default=0))},
         "recovery_s": recovery_s,
         "krkn_exit": proc.returncode,
-        "krkn_failed": bool(re.search(r"Exit Status\s*:\s*FAIL", text)) or (not reason and proc.returncode != 0),
+        "krkn_failed": krkn_failed(text, bool(reason), proc.returncode),
         "krkn": {k: float(v) for k, v in re.findall(
             r'"(total_recovery_time|pod_rescheduling_time|pod_readiness_time)": *([0-9.]+)', text)},
     }
