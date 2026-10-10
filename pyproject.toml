@@ -5,6 +5,7 @@ description = "One challenge day. See INSTRUCTIONS.md."
 requires-python = ">=3.12"
 dependencies = [
     "anthropic",
+    "langgraph>=1.2.14",
     "python-dotenv",
     "streamlit>=1.57",  # 1.57+ ships `streamlit skills`
 ]
