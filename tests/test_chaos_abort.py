@@ -161,3 +161,47 @@ def test_a_second_fault_is_refused_while_one_runs(tmp_path, monkeypatch):
     with chaos.exclusive("control-ad-cpu"):
         with chaos.exclusive("control-ad-cpu"):
             assert "control-ad-cpu" in (tmp_path / "LOCK").read_text()
+
+
+def test_a_pair_runs_until_both_finish_and_an_abort_kills_both():
+    short = subprocess.Popen(["sleep", "0.2"], start_new_session=True)
+    long = subprocess.Popen(["sleep", "60"], start_new_session=True)
+    probes = iter([(True, 10)] * 10 + [(False, 2000)] * 100)  # healthy after the short one ends, then broken
+    reason = chaos.supervise([short, long], LIMITS, probe=lambda: next(probes), blast=lambda: None,
+                             cleanup=lambda: None, interval=0.05)
+    assert reason, "stopped watching when the first fault finished"
+    assert short.poll() is not None and long.poll() is not None
+
+
+EXPS = [
+    {"id": "blast-loss", "scenario": "node-network-chaos", "target": "node:chaos-worker", "probe_url": "u",
+     "params": {"loss": "10"}, "abort_if": {"error_rate": 0.5, "p95_ms": 3000, "max_s": 240}},
+    {"id": "blast-latency", "scenario": "node-network-chaos", "target": "node:chaos-worker", "probe_url": "u",
+     "params": {"latency": "200ms"}, "abort_if": {"error_rate": 0.5, "p95_ms": 3000, "max_s": 240}},
+    {"id": "blast-memory", "scenario": "node-memory-hog", "target": "node:chaos-worker", "probe_url": "u",
+     "params": {}, "abort_if": {"error_rate": 0.5, "p95_ms": 3000, "max_s": 240}},
+    {"id": "cart-wipe", "scenario": "pod-scenarios", "target": "app.kubernetes.io/component=valkey-cart",
+     "probe_url": "u", "impact": "cart", "params": {}, "abort_if": {"error_rate": 0.3, "p95_ms": 5000, "max_s": 180}},
+    {"id": "control-ad-cpu", "scenario": "flagd", "target": "opentelemetry.io/name=ad", "probe_url": "u",
+     "expect": "low", "params": {}, "abort_if": {"error_rate": 0.5, "p95_ms": 3000, "max_s": 240}},
+]
+
+
+@pytest.mark.parametrize("pair,why", [("blast-loss+blast-latency", "same node scenario"),
+                                      ("cart-wipe+control-ad-cpu", "control"),
+                                      ("cart-wipe+cart-wipe", "same target"),
+                                      ("cart-wipe+blast-loss+blast-memory", "two faults")])
+def test_forbidden_pairs_are_refused(monkeypatch, pair, why):
+    monkeypatch.setattr(chaos, "load_experiments", lambda: EXPS)
+    with pytest.raises(SystemExit, match=why):
+        chaos.find(pair)
+
+
+def test_a_pair_has_both_targets_and_the_stricter_kill_switch(monkeypatch):
+    monkeypatch.setattr(chaos, "load_experiments", lambda: EXPS)
+    pair = chaos.combined(chaos.find("blast-memory+cart-wipe"))
+    assert pair["abort_if"] == {"error_rate": 0.3, "p95_ms": 3000, "max_s": 240}
+    assert pair["impact"] == "cart" and set(pair["params"]) == {"blast-memory", "cart-wipe"}
+    cart_pod = {"labels": {"app.kubernetes.io/component": "valkey-cart"}}
+    assert chaos.is_target(pair["target"], cart_pod)  # its replacement is the fault, not collateral
+    assert not chaos.is_target(pair["target"], {"labels": {"opentelemetry.io/name": "ad"}})

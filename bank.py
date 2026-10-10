@@ -1,6 +1,6 @@
 """Fault bank: run each experiment, measure what it broke, and rate it high / medium / low.
 
-    uv run python bank.py run payment-failure-100   # or several ids, or: run all
+    uv run python bank.py run payment-kill   # or several ids, a pair a+b, or: run all
     uv run python bank.py show                      # the bank as a markdown table, by tier
 
 Effects come from Prometheus (per-service span metrics, per-container CPU / memory) over the
@@ -93,13 +93,13 @@ def effects(before: dict, during: dict, pods_before: dict, pods_after: dict, sum
         out.append({"kind": "data-loss", "what": f"cart items {cart['before']} -> {cart['after']}"})
     if summary["recovery_s"] is None:
         out.append({"kind": "no-recovery", "what": f"shop not healthy {chaos.RECOVER_TIMEOUT_S} s after the fault"})
-    target_svc = target.partition("=")[2]
+    target_svcs = {t.partition("=")[2] for t in target.split(",")}  # a pair has two targets
     for svc, b in sorted(before["services"].items()):
         # a service nobody can reach serves nothing: that's the fault on the target, damage elsewhere.
         # Absent from the fault window means no data, not zero traffic.
         d = during["services"].get(svc)
         d_rps = d["rps"] if d else None
-        if d and svc != target_svc and b.get("rps", 0) >= MIN_RPS and d_rps <= STARVED * b["rps"]:
+        if d and svc not in target_svcs and b.get("rps", 0) >= MIN_RPS and d_rps <= STARVED * b["rps"]:
             out.append({"kind": "throughput", "service": svc, "what": f"{svc} served {b['rps']} -> {d_rps} req/s"})
     for svc, d in sorted(during["services"].items()):
         b = before["services"].get(svc, {"calls": 0, "errors": 0, "p95_ms": None})
@@ -206,7 +206,7 @@ def measure(exp_id: str, baseline: dict) -> dict:
 
 
 def _measure(exp_id: str, baseline: dict) -> dict:
-    exp = next(e for e in chaos.load_experiments() if e["id"] == exp_id)
+    exp = chaos.combined(chaos.find(exp_id))  # one fault, or a pair "a+b"
     pods_before = chaos.pods()
     summary = chaos.run(exp_id)
     if summary["abort_reason"] in ("STOP file", "Ctrl+C"):

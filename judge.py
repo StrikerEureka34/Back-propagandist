@@ -159,17 +159,23 @@ def _upstream(graph: dict, svc: str, hops: int = 2) -> set[str]:
     return seen - ENTRY
 
 
+def forbidden(a: dict, b: dict) -> str | None:
+    """Why this pair never runs, whatever the map says (chaos.py refuses it too), or None."""
+    if any("expect" in e or e["scenario"] == "flagd" for e in (a, b)):
+        return "a control checks the scale; it isn't paired"
+    if strength(a) == strength(b) == "broad":
+        return "two broad faults: breaks everything, teaches nothing"
+    if a["target"] == b["target"] and not (a["target"].startswith("node:") and a["scenario"] != b["scenario"]):
+        return "same node scenario on the same node: their rules clash" if a["target"].startswith("node:") else "same target"
+    return None
+
+
 def _pair(a: dict, b: dict, graph: dict) -> tuple[bool, str]:
     """(kept, why) for one pair of faults."""
-    if any("expect" in e or e["scenario"] == "flagd" for e in (a, b)):
-        return False, "a control checks the scale; it isn't paired"
-    if strength(a) == strength(b) == "broad":
-        return False, "two broad faults: breaks everything, teaches nothing"
-    if a["target"] == b["target"]:
-        if a["target"].startswith("node:") and a["scenario"] != b["scenario"]:
-            return True, "two different faults on the same node"
-        why = "same node scenario on the same node: their rules clash" if a["target"].startswith("node:") else "same target"
+    if why := forbidden(a, b):
         return False, why
+    if a["target"] == b["target"]:
+        return True, "two different faults on the same node"
     if "http-load" in (a["scenario"], b["scenario"]):
         return True, "a load spike touches every request"
     if any(e["scenario"] in NODE_SCENARIOS for e in (a, b)):

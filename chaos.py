@@ -3,6 +3,7 @@ itself when it hurts too much.
 
     uv run python chaos.py list
     uv run python chaos.py run traffic-spike     # writes runs/<id>/{events.jsonl,summary.json,krknctl.log}
+    uv run python chaos.py run blast-loss+cart-wipe   # two faults at once, under one kill switch
 
 Kill switch, checked every second: probe error rate / p95, blast radius (a non-target pod goes
 NotReady), max run time, Ctrl+C, or a file named runs/STOP. On abort: switch the flag off, or
@@ -46,6 +47,39 @@ FLAG_FILE = "/app/data/demo.flagd.json"  # shared with flagd, which reloads it i
 def load_experiments() -> list[dict]:
     with open(ROOT / "experiments.toml", "rb") as f:
         return tomllib.load(f)["experiment"]
+
+
+def find(exp_id: str) -> list[dict]:
+    """The experiments behind an id: one, or two for a pair "a+b". judge.py's forbidden pairs are refused."""
+    by_id = {e["id"]: e for e in load_experiments()}
+    ids = exp_id.split("+")
+    if unknown := [i for i in ids if i not in by_id]:
+        sys.exit(f"unknown experiment {unknown[0]!r}; try: {', '.join(by_id)}")
+    if len(ids) > 2:
+        sys.exit("a combination is two faults: a+b")
+    exps = [by_id[i] for i in ids]
+    if len(exps) == 2:
+        import judge  # judge imports bank, which imports this module
+        if why := judge.forbidden(*exps):
+            sys.exit(f"refused {exp_id}: {why}")
+    return exps
+
+
+def combined(exps: list[dict]) -> dict:
+    """One experiment record for a pair: both targets (comma-separated), the stricter kill switch
+    and the longer time limit, both faults' params."""
+    if len(exps) == 1:
+        return exps[0]
+    a, b = exps
+    limits = {k: min(a["abort_if"][k], b["abort_if"][k]) for k in ("error_rate", "p95_ms")}
+    limits["max_s"] = max(a["abort_if"]["max_s"], b["abort_if"]["max_s"])
+    pair = {"id": f"{a['id']}+{b['id']}", "scenario": f"{a['scenario']}+{b['scenario']}",
+            "target": f"{a['target']},{b['target']}", "probe_url": a["probe_url"], "abort_if": limits,
+            "note": f"{a.get('note') or a['scenario']} + {b.get('note') or b['scenario']}",
+            "params": {a["id"]: a["params"], b["id"]: b["params"]}}
+    if "cart" in (a.get("impact"), b.get("impact")):
+        pair["impact"] = "cart"
+    return pair
 
 
 _held = False
@@ -139,11 +173,13 @@ def p95_ms(samples: list[tuple]) -> float:
 
 
 def supervise(proc, limits, probe, blast, cleanup, interval=1.0, stop_file=None, log=None, info=None) -> str | None:
-    """Watch a running scenario once per `interval`. On a trigger: kill it, run cleanup, return why."""
+    """Watch a running scenario (or a list of them: a pair) once per `interval`, until all have finished.
+    On a trigger: kill them all, run cleanup, return why."""
     log = log or (lambda **kw: None)
+    procs = proc if isinstance(proc, list) else [proc]
     samples, t0, reason = [], time.monotonic(), None
     try:
-        while proc.poll() is None:
+        while any(p.poll() is None for p in procs):
             tick = time.monotonic()
             ok, ms = probe()
             samples.append((tick - t0, ok, ms))
@@ -164,7 +200,8 @@ def supervise(proc, limits, probe, blast, cleanup, interval=1.0, stop_file=None,
         # first bad/slow probe among the ones the decision was based on (for the "how late" figure)
         bad = [s[0] for s in samples if s[0] > samples[-1][0] - WINDOW_S and (not s[1] or s[2] > limits["p95_ms"])] if samples else []
         log(event="abort", reason=reason)
-        kill(proc)
+        for p in procs:
+            kill(p)
         cleanup()
         if info is not None:
             info["first_bad_to_abort_s"] = round(decided - t0 - bad[0], 1) if bad else None
@@ -207,10 +244,14 @@ def pods() -> dict[str, dict]:
 
 
 def is_target(target: str, pod: dict) -> bool:
-    if target.startswith("node:"):
-        return False  # a node fault has no target pod: any NotReady pod is collateral
-    key, _, value = target.partition("=")
-    return pod["labels"].get(key) == value
+    """target: "key=value", "node:<name>", or a pair's two of them joined by a comma."""
+    for t in target.split(","):
+        if t.startswith("node:"):
+            continue  # a node fault has no target pod: any NotReady pod is collateral
+        key, _, value = t.partition("=")
+        if pod["labels"].get(key) == value:
+            return True
+    return False
 
 
 def blast_radius(target: str, before: dict):
@@ -223,7 +264,10 @@ def blast_radius(target: str, before: dict):
     return check
 
 
-def cleanup_fn(exp: dict, pods_before: dict, containers_before: set):
+def cleanup_fn(exp: dict, pods_before: dict, containers_before: set, spare: str = ""):
+    """spare: targets whose replacement pods stay (in a pair, the other fault's target too)."""
+    spare = spare or exp["target"]
+
     def cleanup(aborted: bool = True):
         if exp["scenario"] == "flagd":  # the fault lives in flagd: switching the flag off ends it
             set_flag(exp["params"]["flag"], "off")
@@ -233,7 +277,7 @@ def cleanup_fn(exp: dict, pods_before: dict, containers_before: set):
                 sh("docker", "rm", "-f", name)
         # new pods that aren't the target's replacement are krkn's helper/attacker pods
         for name, p in pods().items():
-            if name not in pods_before and not is_target(exp["target"], p):
+            if name not in pods_before and not is_target(spare, p):
                 # force: a graceful delete leaves the load pods firing for their 30 s shutdown
                 sh("kubectl", "delete", "pod", name, "-n", NS, "--wait=false", "--grace-period=0", "--force")
         if "service" in exp:  # hijacked Service: krkn restores the selector only if it finishes
@@ -285,9 +329,8 @@ def wait_recovered(url: str, baseline_p95: float, log) -> float | None:
 
 
 def run(exp_id: str) -> dict:
-    exp = next((e for e in load_experiments() if e["id"] == exp_id), None)
-    if not exp:
-        sys.exit(f"unknown experiment {exp_id!r}; try: {', '.join(e['id'] for e in load_experiments())}")
+    exps = find(exp_id)
+    exp = combined(exps)
     out = RUNS / exp_id
     out.mkdir(parents=True, exist_ok=True)
     events = open(out / "events.jsonl", "w")
@@ -312,18 +355,19 @@ def run(exp_id: str) -> dict:
 
     pods_before = pods()
     containers_before = set(sh("docker", "ps", "-a", "--format", "{{.Names}}").split())
-    if exp["scenario"] == "flagd":
-        # sleep stands in for krknctl: it is the fault's lifetime, so supervise() works unchanged
-        cmd = ["sleep", str(exp["params"]["duration"])]
-    else:
-        cmd = krkn_command(exp)
-    log(event="start", id=exp_id, cmd=cmd, baseline_p95_ms=round(baseline_p95))
-    print("running:", " ".join(cmd))
-    krkn_log = open(out / "krknctl.log", "w")
+    names = ["krknctl.log"] if len(exps) == 1 else [f"krknctl-{e['id']}.log" for e in exps]
+    krkn_logs, procs = [open(out / n, "w") for n in names], []
     started_at = time.time()
-    if exp["scenario"] == "flagd":
-        set_flag(exp["params"]["flag"], exp["params"]["variant"])
-    proc = subprocess.Popen(cmd, stdout=krkn_log, stderr=subprocess.STDOUT, start_new_session=True)
+    for e, krkn_log in zip(exps, krkn_logs):
+        if e["scenario"] == "flagd":
+            # sleep stands in for krknctl: it is the fault's lifetime, so supervise() works unchanged
+            cmd = ["sleep", str(e["params"]["duration"])]
+            set_flag(e["params"]["flag"], e["params"]["variant"])
+        else:
+            cmd = krkn_command(e)
+        log(event="start", id=e["id"], cmd=cmd, baseline_p95_ms=round(baseline_p95))
+        print("running:", " ".join(cmd))
+        procs.append(subprocess.Popen(cmd, stdout=krkn_log, stderr=subprocess.STDOUT, start_new_session=True))
     started = time.monotonic()
     probes = []
 
@@ -332,17 +376,23 @@ def run(exp_id: str) -> dict:
         probes.append((time.monotonic() - started, ok, ms))
         return ok, ms
 
-    cleanup = cleanup_fn(exp, pods_before, containers_before)
+    cleanups = [cleanup_fn(e, pods_before, containers_before, exp["target"]) for e in exps]
+
+    def cleanup(aborted: bool = True):
+        for c in cleanups:
+            c(aborted)
     info = {}
-    reason = supervise(proc, exp["abort_if"], probe, blast_radius(exp["target"], pods_before),
+    reason = supervise(procs, exp["abort_if"], probe, blast_radius(exp["target"], pods_before),
                        cleanup, stop_file=stop_file, log=log, info=info)
     ended = time.monotonic()
     if not reason:
         cleanup(aborted=False)  # finished by itself: still remove krkn's leftovers
-    krkn_log.close()
+    for krkn_log in krkn_logs:
+        krkn_log.close()
     recovery_s = wait_recovered(url, baseline_p95, log)
 
-    text = (out / "krknctl.log").read_text(errors="replace")
+    texts = [(out / n).read_text(errors="replace") for n in names]
+    failed = [krkn_failed(t, bool(reason), p.returncode) for t, p in zip(texts, procs)]
     summary = {
         "id": exp_id, "scenario": exp["scenario"],
         "aborted": bool(reason), "abort_reason": reason, "first_bad_probe_to_abort_s": info.get("first_bad_to_abort_s"),
@@ -353,18 +403,21 @@ def run(exp_id: str) -> dict:
         "impact": {"probes": len(probes), "failed": sum(1 for p in probes if not p[1]),
                    "p95_ms": round(p95_ms(probes)), "max_ms": round(max((p[2] for p in probes), default=0))},
         "recovery_s": recovery_s,
-        "krkn_exit": proc.returncode,
-        "krkn_failed": krkn_failed(text, bool(reason), proc.returncode),
+        "krkn_exit": max(p.returncode for p in procs),
+        "krkn_failed": any(failed),  # in a pair, one fault missing means it's not the pair that was measured
         "krkn": {k: float(v) for k, v in re.findall(
-            r'"(total_recovery_time|pod_rescheduling_time|pod_readiness_time)": *([0-9.]+)', text)},
+            r'"(total_recovery_time|pod_rescheduling_time|pod_readiness_time)": *([0-9.]+)', "\n".join(texts))},
     }
+    if len(exps) == 2:
+        summary["parts"] = {e["id"]: {"scenario": e["scenario"], "krkn_exit": p.returncode, "krkn_failed": f}
+                            for e, p, f in zip(exps, procs, failed)}
     if cart_before is not None:
         summary["impact"]["cart_items"] = {"before": cart_before, "after": cart_items(user)}
     (out / "summary.json").write_text(json.dumps(summary, indent=2))
     log(event="end", **summary)
     print(json.dumps(summary, indent=2))
     if summary["krkn_failed"]:
-        print("WARNING: krkn itself failed, no fault was injected. See", out / "krknctl.log")
+        print("WARNING: krkn itself failed, the fault wasn't (fully) injected. See", out)
     return summary
 
 
