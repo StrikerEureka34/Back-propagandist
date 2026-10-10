@@ -193,18 +193,37 @@ def approver(auto: bool, replay: bool, ui_dir: Path | None = None) -> Callable[[
     return approve
 
 
-def file_approver(ui_dir: Path) -> Callable[[dict], bool | None]:
-    """The console's Approve / Skip / Stop buttons: the agent writes pending.json and waits for the
-    page to write decision.json, the same pattern as chaos.py's STOP file."""
-    pending, decision = ui_dir / "pending.json", ui_dir / "decision.json"
+REORDER = "reorder"  # approve()'s answer when a person changed the order while a card waited
 
-    def approve(item: dict) -> bool | None:
+
+def by_person(queue: list[dict], out: Path) -> list[dict]:
+    """The queue in the order a person set on the page (order.json: run keys, first = next). Runs the
+    file doesn't name keep their order after the named ones. No file: the planner's order."""
+    try:
+        want = json.loads((out / "order.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return queue
+    pos = {k: n for n, k in enumerate(want)}
+    return sorted(queue, key=lambda q: pos.get("+".join(q["ids"]), len(pos)))
+
+
+def file_approver(ui_dir: Path) -> Callable[[dict], bool | str | None]:
+    """The console's Approve / Skip / Stop buttons: the agent writes pending.json and waits for the
+    page to write decision.json, the same pattern as chaos.py's STOP file. A new order.json while the
+    card waits answers REORDER: the card goes back in the queue and the new first fault is asked for."""
+    pending, decision, order = ui_dir / "pending.json", ui_dir / "decision.json", ui_dir / "order.json"
+
+    def approve(item: dict) -> bool | str | None:
         decision.unlink(missing_ok=True)
+        asked = time.time()
         _write(pending, item)
         while not decision.exists():
             if chaos.stop_requested():  # the page's kill switch while a card waits
                 pending.unlink(missing_ok=True)
                 return None
+            if order.exists() and order.stat().st_mtime > asked:
+                pending.unlink(missing_ok=True)
+                return REORDER
             time.sleep(0.5)
         choice = json.loads(decision.read_text(encoding="utf-8")).get("decision")
         decision.unlink(missing_ok=True)
@@ -353,9 +372,12 @@ def build(deps: Deps, out: Path):
     def run_next(state: dict) -> dict:
         if chaos.stop_requested():  # kill switch pressed between runs: nothing new starts
             return {"stopped": "a person pressed the kill switch"}
-        item, rest = state["queue"][0], state["queue"][1:]
+        queue = by_person(state["queue"], out)
+        item, rest = queue[0], queue[1:]
         key = "+".join(item["ids"])
         decision = deps.approve(item)
+        if decision == REORDER:
+            return {"queue": queue}
         if decision is None:
             return {"queue": rest, "stopped": "a person stopped the session"}
         if not decision:

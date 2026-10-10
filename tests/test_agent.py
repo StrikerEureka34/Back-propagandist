@@ -1,4 +1,5 @@
 import json
+import time
 from pathlib import Path
 
 import pytest
@@ -250,3 +251,32 @@ def test_with_pairs_on_the_planner_ranks_them_on_merit_and_none_is_forced(tmp_pa
     agent.session(POOL, 2, deps, tmp_path)
     assert "queue a pair only if you expect it to show something neither fault shows alone" in prompts[0]
     assert not any("+" in key for key in ran)  # the planner chose singles: the code doesn't add a pair
+
+
+def test_a_person_can_reorder_the_queue_and_a_waiting_card_yields(tmp_path):
+    out = tmp_path / "session"
+    out.mkdir()
+    (out / "order.json").write_text(json.dumps(["catalog-kill", "payment-kill"]))  # set on the page
+    ran = []
+    replay = agent.replay(BANK)
+    deps = agent.Deps(ask=fake_ask({"plan": PLAN, "worker": ANALYST, "fixer": FIXER, "final": FINAL}),
+                      run=lambda key: ran.append(key) or replay(key), approve=lambda item: True,
+                      exps=[{"id": i, "scenario": e["scenario"], "params": e["params"],
+                             "target": "node:chaos-worker" if e["scenario"].startswith("node") else f"opentelemetry.io/name={i}"}
+                            for i, e in BANK.items()],
+                      graph={"nodes": {}, "edges": []})
+    agent.session(POOL, 2, deps, out)
+    assert ran == ["catalog-kill", "payment-kill"]  # the planner had blast-loss and cart-wipe first
+
+    import threading
+    approve = agent.file_approver(tmp_path)
+
+    def reorder():
+        while not (tmp_path / "pending.json").exists():
+            time.sleep(0.01)
+        time.sleep(0.05)  # the order is saved after the card appeared
+        (tmp_path / "order.tmp").write_text(json.dumps(["cart-wipe"]))
+        (tmp_path / "order.tmp").replace(tmp_path / "order.json")
+    threading.Thread(target=reorder, daemon=True).start()
+    assert approve({"ids": ["blast-loss"]}) == agent.REORDER
+    assert not (tmp_path / "pending.json").exists()
