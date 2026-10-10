@@ -285,37 +285,37 @@
       {
         "kind": "latency",
         "service": "agent",
-        "what": "agent p95 195 -> 930 ms"
+        "what": "agent p95 195 -> 990 ms"
       },
       {
         "kind": "latency",
         "service": "checkout",
-        "what": "checkout p95 48 -> 3650 ms"
+        "what": "checkout p95 48 -> 1880 ms"
       },
       {
         "kind": "latency",
         "service": "email",
-        "what": "email p95 7 -> 387 ms"
+        "what": "email p95 6 -> 390 ms"
       },
       {
         "kind": "latency",
         "service": "frontend",
-        "what": "frontend p95 33 -> 996 ms"
+        "what": "frontend p95 33 -> 1046 ms"
       },
       {
         "kind": "latency",
         "service": "frontend-proxy",
-        "what": "frontend-proxy p95 31 -> 1102 ms"
+        "what": "frontend-proxy p95 29 -> 1139 ms"
       },
       {
         "kind": "latency",
         "service": "product-catalog",
-        "what": "product-catalog p95 27 -> 746 ms"
+        "what": "product-catalog p95 29 -> 756 ms"
       },
       {
         "kind": "latency",
         "service": "shipping",
-        "what": "shipping p95 4 -> 384 ms"
+        "what": "shipping p95 4 -> 387 ms"
       }
     ],
     "fault": "+200 ms on everything leaving the backend node",
@@ -329,26 +329,27 @@
     },
     "recovery_s": 0.0,
     "shop": {
-      "probes": 153,
+      "probes": 152,
       "failed": 0,
-      "p95_ms": 207,
-      "max_ms": 208
+      "p95_ms": 206,
+      "max_ms": 242
     },
-    "baseline_p95_ms": 5,
-    "measured_at": "2026-10-10T18:07:52+00:00",
+    "baseline_p95_ms": 6,
+    "measured_at": "2026-10-10T20:26:01+00:00",
     "windows": {
       "baseline": [
-        1791654835,
-        1791655135
+        1791663593,
+        1791663743
       ],
       "fault": [
-        1791655454,
-        1791655667
+        1791663744,
+        1791663956
       ]
     },
-    "fault_ended_at": 1791655606.8,
-    "recovered_s": null,
-    "recovery_checked_s": 70
+    "fault_ended_at": 1791663895.9,
+    "recovered_s": 150,
+    "recovery_checked_s": 155,
+    "recovery_live": true
   },
   "blast-memory": {
     "tier": "low",
@@ -407,11 +408,6 @@
       {
         "kind": "data-loss",
         "what": "cart items 1 -> 0"
-      },
-      {
-        "kind": "latency",
-        "service": "ad",
-        "what": "ad p95 4 -> 148 ms"
       }
     ],
     "fault": "cart store (valkey-cart) pod killed; it has no volume",
@@ -424,30 +420,31 @@
     },
     "recovery_s": 0.0,
     "shop": {
-      "probes": 26,
+      "probes": 28,
       "failed": 0,
-      "p95_ms": 9,
-      "max_ms": 9,
+      "p95_ms": 7,
+      "max_ms": 7,
       "cart_items": {
         "before": 1,
         "after": 0
       }
     },
-    "baseline_p95_ms": 7,
-    "measured_at": "2026-10-10T17:51:13+00:00",
+    "baseline_p95_ms": 5,
+    "measured_at": "2026-10-10T20:18:08+00:00",
     "windows": {
       "baseline": [
-        1791652922,
-        1791653222
+        1791663245,
+        1791663395
       ],
       "fault": [
-        1791654582,
-        1791654668
+        1791663395,
+        1791663483
       ]
     },
-    "fault_ended_at": 1791654608.4,
-    "recovered_s": null,
-    "recovery_checked_s": 70
+    "fault_ended_at": 1791663423.4,
+    "recovered_s": 0.0,
+    "recovery_checked_s": 65,
+    "recovery_live": true
   },
   "cpu-starve": {
     "tier": "medium",
@@ -533,48 +530,39 @@
     "tier": "high",
     "effects": [
       {
-        "kind": "latency",
-        "service": "ad",
-        "what": "ad p95 41 -> 287 ms"
-      },
-      {
-        "kind": "latency",
-        "service": "agent",
-        "what": "agent p95 195 -> 390 ms"
-      },
-      {
         "kind": "errors",
         "service": "checkout",
-        "what": "checkout errors 0% -> 56% (5/9 calls)"
+        "what": "checkout errors 0% -> 8% (2/26 calls)"
       },
       {
         "kind": "latency",
         "service": "checkout",
-        "what": "checkout p95 48 -> 9583 ms"
+        "what": "checkout p95 48 -> 8125 ms"
       },
       {
         "kind": "latency",
         "service": "frontend",
-        "what": "frontend p95 33 -> 232 ms"
+        "what": "frontend p95 34 -> 323 ms"
       },
       {
         "kind": "latency",
         "service": "frontend-proxy",
-        "what": "frontend-proxy p95 31 -> 282 ms"
+        "what": "frontend-proxy p95 31 -> 338 ms"
+      },
+      {
+        "kind": "latency",
+        "service": "product-catalog",
+        "what": "product-catalog p95 33 -> 342 ms"
       },
       {
         "kind": "errors",
         "service": "shipping",
-        "what": "shipping errors 0% -> 29% (12/41 calls)"
+        "what": "shipping errors 0% -> 8% (7/89 calls)"
       },
       {
         "kind": "latency",
         "service": "shipping",
-        "what": "shipping p95 4 -> 9179 ms"
-      },
-      {
-        "kind": "restart",
-        "what": "pod ad-6667d5966-68v2k restarted 2x"
+        "what": "shipping p95 4 -> 6812 ms"
       }
     ],
     "fault": "10 % packet loss on everything leaving the backend node",
@@ -588,26 +576,27 @@
     },
     "recovery_s": 0.0,
     "shop": {
-      "probes": 154,
+      "probes": 150,
       "failed": 0,
-      "p95_ms": 96,
-      "max_ms": 433
+      "p95_ms": 44,
+      "max_ms": 633
     },
     "baseline_p95_ms": 5,
-    "measured_at": "2026-10-10T18:11:35+00:00",
+    "measured_at": "2026-10-10T20:10:59+00:00",
     "windows": {
       "baseline": [
-        1791654835,
-        1791655135
+        1791662543,
+        1791662843
       ],
       "fault": [
-        1791655677,
-        1791655891
+        1791662844,
+        1791663054
       ]
     },
-    "fault_ended_at": 1791655830.6,
+    "fault_ended_at": 1791662994.0,
     "recovered_s": 150,
-    "recovery_checked_s": 900
+    "recovery_checked_s": 155,
+    "recovery_live": true
   },
   "quote-garbage": {
     "tier": "high",

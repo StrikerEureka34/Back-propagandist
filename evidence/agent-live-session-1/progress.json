@@ -1,0 +1,161 @@
+{
+  "stage": "done",
+  "pool": [
+    "cart-wipe",
+    "cpu-starve",
+    "kafka-outage",
+    "payment-kill",
+    "recommendation-cutoff",
+    "blast-latency",
+    "blast-loss",
+    "blast-memory"
+  ],
+  "budget": 3,
+  "queue": [],
+  "dropped": [],
+  "skipped": [],
+  "stopped": null,
+  "next": [
+    {
+      "ids": [
+        "blast-memory"
+      ],
+      "why": "not ranked by the planner: added by rules, mildest fault first",
+      "confidence": null,
+      "source": "over the run budget"
+    },
+    {
+      "ids": [
+        "kafka-outage"
+      ],
+      "why": "not ranked by the planner: added by rules, mildest fault first",
+      "confidence": null,
+      "source": "over the run budget"
+    },
+    {
+      "ids": [
+        "payment-kill"
+      ],
+      "why": "not ranked by the planner: added by rules, mildest fault first",
+      "confidence": null,
+      "source": "over the run budget"
+    },
+    {
+      "ids": [
+        "recommendation-cutoff"
+      ],
+      "why": "not ranked by the planner: added by rules, mildest fault first",
+      "confidence": null,
+      "source": "over the run budget"
+    },
+    {
+      "ids": [
+        "cpu-starve"
+      ],
+      "why": "not ranked by the planner: added by rules, mildest fault first",
+      "confidence": null,
+      "source": "over the run budget"
+    }
+  ],
+  "plan_ai": true,
+  "plan_by": "openai/gpt-oss-120b",
+  "pid": 3528536,
+  "results": [
+    {
+      "id": "blast-loss",
+      "item": {
+        "ids": [
+          "blast-loss"
+        ],
+        "hypothesis": "10\u202f% packet loss on the backend node will cause checkout and payment RPC failures, reducing completed orders.",
+        "predicted": "high",
+        "reason": "node fault touches every backend (map) and checkout flow depends on payment & Kafka (service\u2011facts).",
+        "confidence": 0.9
+      },
+      "tier": "high",
+      "analysis": {
+        "what_happened": "Backend packet loss spiked checkout p95 from 48ms to 8125ms, errors to 8%, though shop stayed online per probe data.",
+        "why": "Checkout sequences charge card then ship; packet loss blocks shipping/quote calls, causing errors and p95 spikes, per service-facts.",
+        "hypothesis_held": true,
+        "evidence": [
+          "bank.json:blast-loss",
+          "service-facts"
+        ],
+        "follow_up": null,
+        "confidence": 0.6,
+        "_by": "nvidia/nemotron-3.5-lightning:free"
+      },
+      "effects": [
+        "checkout errors 0% -> 8% (2/26 calls)",
+        "checkout p95 48 -> 8125 ms",
+        "frontend p95 34 -> 323 ms",
+        "frontend-proxy p95 31 -> 338 ms",
+        "product-catalog p95 33 -> 342 ms",
+        "shipping errors 0% -> 8% (7/89 calls)",
+        "shipping p95 4 -> 6812 ms"
+      ]
+    },
+    {
+      "id": "cart-wipe",
+      "item": {
+        "ids": [
+          "cart-wipe"
+        ],
+        "hypothesis": "Killing the valkey\u2011cart pod wipes all in\u2011memory carts, leading customers to abandon their purchases.",
+        "predicted": "high",
+        "reason": "cart store has no persistence; frontend /api/cart calls valkey\u2011cart (service\u2011facts).",
+        "confidence": 0.85
+      },
+      "tier": "high",
+      "analysis": {
+        "what_happened": "Pod kill erased in\u2011memory cart items (1\u21920), shop recovered instantly (0.0s), no data loss, SLO preserved",
+        "why": "valkey-cart has no volume (memory only); pod loss immediately loses cart state with no persistent impact, per service-facts",
+        "hypothesis_held": true,
+        "evidence": [
+          "bank.json:cart-wipe",
+          "service-facts"
+        ],
+        "follow_up": null,
+        "confidence": 0.6,
+        "_by": "nvidia/nemotron-3.5-lightning:free"
+      },
+      "effects": [
+        "cart items 1 -> 0"
+      ]
+    },
+    {
+      "id": "blast-latency",
+      "item": {
+        "ids": [
+          "blast-latency"
+        ],
+        "hypothesis": "Adding +200\u202fms latency on all backend egress will increase checkout latency, causing higher cart abandonment.",
+        "predicted": "medium",
+        "reason": "node fault touches every backend (map); frontend latency directly impacts conversion (service\u2011facts).",
+        "confidence": 0.75
+      },
+      "tier": "medium",
+      "analysis": {
+        "what_happened": "Fault injected +200ms backend latency; checkout p95 surged from 48ms to 1880ms, but shop stayed available (0 failures, p95 206ms).",
+        "why": "Checkout pipeline calls backend services through blast node; latency piled up sequentially, spiking checkout 39x while root-cause tag breaks:checkout confirmed critical path.",
+        "hypothesis_held": true,
+        "evidence": [
+          "bank.json:blast-latency",
+          "service-facts"
+        ],
+        "follow_up": null,
+        "confidence": 0.6,
+        "_by": "nvidia/nemotron-3.5-lightning:free"
+      },
+      "effects": [
+        "agent p95 195 -> 990 ms",
+        "checkout p95 48 -> 1880 ms",
+        "email p95 6 -> 390 ms",
+        "frontend p95 33 -> 1046 ms",
+        "frontend-proxy p95 29 -> 1139 ms",
+        "product-catalog p95 29 -> 756 ms",
+        "shipping p95 4 -> 387 ms"
+      ]
+    }
+  ]
+}
