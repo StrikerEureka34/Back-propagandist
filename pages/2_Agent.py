@@ -19,7 +19,7 @@ import streamlit as st
 import bank
 import chaos
 import judge
-from agent import short
+from agent import how_scores_work, short
 
 ROOT = Path(__file__).resolve().parent.parent
 RUNS = ROOT / "runs"
@@ -35,6 +35,9 @@ def read(path: Path):
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
+
+
+OWN = " · model's own estimate "
 
 
 def conf(value, prefix: str = " · confidence ") -> str:
@@ -97,8 +100,9 @@ def pick():
     ranked = {r["id"]: r for r in judge.rank(rated)}
     exps = [e for e in chaos.load_experiments() if "expect" not in e and e["scenario"] != "flagd"]
     st.caption("The planner (Groq gpt-oss-120b) orders the faults you pick by expected leverage. You approve "
-               "every run. An analyst (OpenRouter nemotron) explains each result, and a fixer proposes one fix "
-               "per root cause. Every number on this page comes from rules (judge.py), never from a model.")
+               "every run. An analyst (Groq gpt-oss-20b) explains each result, and a fixer proposes one fix "
+               "per root cause; OpenRouter nemotron steps in if Groq fails. Every number on this page comes "
+               "from rules (judge.py), never from a model.")
     st.header("1. Pick the faults")
     left, right = st.columns([7, 5])
     with right:
@@ -163,13 +167,15 @@ def predicted(item: dict) -> str:
     return (item.get("predicted") or "-") + (f" ({c:.0%})" if isinstance(c, (int, float)) else "")
 
 
-def runs_table(results: list[dict], queue: list[dict]) -> pd.DataFrame:
+def runs_table(results: list[dict], queue: list[dict], left: int = 0) -> pd.DataFrame:
+    """Finished runs, then the queue: the first `left` items run this session, the rest don't."""
     rows = [{"Fault": r["id"], "Measured": r["tier"] if "tier" in r else r["entry"]["tier"],
              "Predicted": predicted(r["item"]),
              "Held? (analyst)": {True: "yes", False: "no"}.get(r["analysis"].get("hypothesis_held"), "-"),
              "Hypothesis (planner)": r["item"].get("hypothesis")} for r in results]
-    rows += [{"Fault": "+".join(q["ids"]), "Measured": "queued", "Predicted": predicted(q),
-              "Held? (analyst)": "", "Hypothesis (planner)": q.get("hypothesis")} for q in queue]
+    rows += [{"Fault": "+".join(q["ids"]), "Measured": "up next" if n < left else "next session",
+              "Predicted": predicted(q), "Held? (analyst)": "", "Hypothesis (planner)": q.get("hypothesis")}
+             for n, q in enumerate(queue)]
     return pd.DataFrame(rows)
 
 
@@ -182,9 +188,19 @@ def analyst_notes(results: list[dict], newest_first: bool = False):
             st.write(f"Why: {a.get('why') or '-'}")
             if a.get("flag"):
                 st.warning(a["flag"])
+            check = a.get("check")
+            if check:
+                disproved = [why for ok, why in check["checks"] if not ok and "bank measured" in why]
+                if disproved:
+                    st.warning("Contradicts the measurement: " + "; ".join(disproved))
+                st.caption(f"Evidence check {check['pct']}%", help=(
+                    "Computed by rules (judge.check_note), not by the model:\n\n"
+                    + "\n".join(f"- {'✓' if ok else '✗'} {why}" for ok, why in check["checks"])
+                    + "\n\nStarts at 100%: -40 for each claim the measurement disproves, -30 if the note "
+                      "names nothing that broke, -20 if an error ratio rests on few calls, -10 without evidence."))
             by = short(a["_by"]) if a.get("_by") else "rules" if str(a.get("why", "")).startswith("(no AI)") else ""
             st.caption((f"By {by}. " if by else "") + f"Evidence: {', '.join(a.get('evidence', [])) or 'none cited'}"
-                       + conf(a.get("confidence"), ". Analyst confidence ") + ".")
+                       + conf(a.get("confidence"), ". Model's own estimate (unchecked) ") + ".")
 
 
 @st.fragment(run_every=2)
@@ -205,7 +221,11 @@ def watch(out: Path):
     st.header("2. Run")
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Runs", f"{len(results)} / {progress.get('budget')}")
-    c2.metric("Queued", len(queue))
+    b = progress.get("budget")
+    budget = b if isinstance(b, int) else len(queue)
+    left = max(0, min(budget - len(results), len(queue)))
+    c2.metric("Still to run", left, help=f"The budget is {budget} runs. Faults past it are listed for the "
+                                         "next session, not run now.")
     c3.metric("Planner", "-" if progress.get("plan_ai") is None else short(progress.get("plan_by"))
               if progress["plan_ai"] else "rules (no AI)", help="The model that actually answered the plan.")
     c4.metric("Status", "Waiting for you" if pending else STAGES.get(progress["stage"], progress["stage"]))
@@ -236,7 +256,11 @@ def watch(out: Path):
     if st.session_state.get("mode") == "live":
         st.page_link("pages/1_Live_run.py", label="Watch the shop live: probe chart and per-service health")
     if results or queue:
-        st.dataframe(runs_table(results, queue), hide_index=True, width="stretch", height="content")
+        st.dataframe(runs_table(results, queue, left), hide_index=True, width="stretch", height="content")
+        if len(queue) > left:
+            st.caption(f"Only the first {budget} faults run, one at a time, in this order. The other "
+                       f"{len(queue) - left} don't run this session. Pairs run only when 'Also test fault "
+                       "pairs' was ticked at the start.")
     analyst_notes(results, newest_first=True)
 
 
@@ -247,19 +271,34 @@ def results_view(out: Path):
     if s is None:
         st.error(f"Can't read {out / 'session.json'}.")
         return
-    results, ranked = s["results"], s["ranked"]
+    results = s["results"]
     entries = [r["entry"] for r in results]
     preds = {r["id"]: r["item"]["predicted"] for r in results if r["item"].get("predicted")}
     hits, judged = judge.hit_rate(preds, {r["id"]: r["entry"] for r in results})
+    # recomputed from the stored measurements, so sessions saved before a rule change show today's reasoning
+    ranked = judge.rank({r["id"]: r["entry"] for r in results}, preds)
+    targets = {e["id"]: e["target"] for e in chaos.load_experiments()}
+    for r in results:
+        if "check" not in r["analysis"]:
+            pct, checks = judge.check_note(r["analysis"], r["entry"], targets.get(r["id"].split("+")[0], ""))
+            r["analysis"]["check"] = {"pct": pct, "checks": [[ok, why] for ok, why in checks]}
     st.header("3. Results")
     st.caption(f"Session {out.name}" + (f" · stopped: {s['stopped']}" if s.get("stopped") else ""))
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Resilience score", f"{judge.resilience(entries)} / 100",
-              help="krkn's formula: critical SLOs 3 points, warnings 1, points passed / total, over this pool.")
+              help="SLO points held / points possible x 100, krkn's formula (critical SLOs 3 points, warnings 1) "
+                   "over SLOs that measure what customers feel. A customer page 10x slower or over 2 s counts as "
+                   "no answer. Not krkn's built-in score: it gave 100/100 to a fault that made the shop 66x slower. "
+                   "Details: 'How the scores work' below.")
     c2.metric("Root causes found", len(judge.root_causes(ranked)),
-              help="Distinct causes rated medium or high, each exposed by a mild or targeted fault.")
+              help="Distinct root-cause tags rated medium or high, each exposed by a mild or targeted fault. "
+                   "Broad faults (a node at full CPU, a traffic flood) don't count: breaking everything proves nothing.")
+    blind = s.get("plan_blind")
     c3.metric("Planner hit rate", f"{hits} / {judged}" if judged else "not scored",
-              help="Predicted tier = measured tier. Not scored when the planner made no predictions.")
+              help="How often the planner's predicted tier matched the measured one. " + (
+                  "It planned blind (replay), so this is a real test of its reasoning." if blind else
+                  "It saw the bank's earlier ratings (live), so a high hit rate is partly memory." if blind is False
+                  else "Not scored when the planner made no predictions."))
     c4.metric("Runs", f"{len(results)} / {s['budget']}")
     with st.container(border=True):
         st.write(s["summary"]["text"])
@@ -276,12 +315,42 @@ def results_view(out: Path):
                 st.session_state.pop(k, None)
             st.rerun()
 
+    with st.expander("How the scores work"):
+        st.markdown("\n".join(how_scores_work()))
+        grid = {r["id"]: {row["slo"]: ("✓" if row["held"] else "✗") for row in judge.slo_rows(r["entry"])}
+                for r in results}
+        st.dataframe(pd.DataFrame([{"SLO": slo, "Points": pts, **{i: grid[i][slo] for i in grid}}
+                                   for slo, pts, _, _ in judge.SLOS]), hide_index=True, width="stretch",
+                     height="content")
+        st.caption("Each run's SLOs: ✓ held, ✗ broken. The broken ones, with the effect behind them, are in the "
+                   "findings table.")
+
     st.subheader("Findings, ranked by leverage")
+    found = judge.findings(ranked)
+    number = {r["id"]: n for n, r in enumerate(found, 1)}
+    notes = {r["id"]: r["analysis"] for r in results}
     st.dataframe(pd.DataFrame([{
-        "#": n, "Fault": r["id"], "Tier": r["tier"], "Strength": r["strength"], "Leverage": r["leverage"],
-        "Root cause": r["cause"] + (" (repeat)" if r["repeat"] else ""), "What broke": "; ".join(r["effects"][:2]),
-    } for n, r in enumerate(judge.findings(ranked), 1)]), hide_index=True, width="stretch", height="content",
-        column_config={"Leverage": st.column_config.NumberColumn(format="%.2f", help="impact ÷ fault strength")})
+        "#": n, "Fault": r["id"], "Tier": r["tier"], "Strength": r["strength"],
+        "Leverage": judge.leverage_text(r), "SLO points": f"{r['score'][0]} / {r['score'][1]}",
+        "Broken SLOs": ", ".join(r["broken"]) or "none",
+        "Root cause": r["cause"] + (f" (same cause as #{number[r['repeat_of']]})" if r.get("repeat_of") in number else ""),
+        "Decided by": r["decided_by"],
+        "Evidence check": f"{notes[r['id']]['check']['pct']}%" if notes[r["id"]].get("check") else "-",
+    } for n, r in enumerate(found, 1)]), hide_index=True, width="stretch", height="content", column_config={
+        "Tier": st.column_config.TextColumn(help="Measured by the bank (bank.py): high = customers hit errors or lose "
+                                                 "data, or no recovery; medium = other services error or customers are "
+                                                 "2x slower; low = less."),
+        "Strength": st.column_config.TextColumn(help="How hard we pushed: mild 1 (partial: latency, loss, memory), "
+                                                     "targeted 2 (one service), broad 3 (a whole node, the front door)."),
+        "Leverage": st.column_config.TextColumn(help="Impact points (high 3, medium 2, low 1) ÷ strength points. "
+                                                     "A big effect from a small fault ranks first."),
+        "SLO points": st.column_config.TextColumn(help="SLO points held / possible for this fault (critical 3, warning 1)."),
+        "Root cause": st.column_config.TextColumn(help="A tag from what broke. Findings with the same tag likely "
+                                                       "share one fix."),
+        "Decided by": st.column_config.TextColumn(help="The measured effect that set the root-cause tag."),
+        "Evidence check": st.column_config.TextColumn(help="Rules' check of the analyst's note; open the note below "
+                                                           "for each test."),
+    })
     st.caption("Why each one broke is in the analyst notes below.")
 
     st.subheader("Fixes, one per root cause")
@@ -294,7 +363,7 @@ def results_view(out: Path):
                 st.write(f.get("fix") or "-")
                 if f.get("change") and f.get("change") not in ("-", f.get("fix")):
                     st.caption(f"Change: {f['change']}")
-                st.caption(f"Verify with {f.get('verify_with')}{conf(f.get('confidence'))} · "
+                st.caption(f"Verify with {f.get('verify_with')}{conf(f.get('confidence'), OWN)} · "
                            f"{'from the fix catalog' if f.get('catalog_match') else 'not in the fix catalog'}")
 
     left, right = st.columns([7, 5])
@@ -309,9 +378,11 @@ def results_view(out: Path):
         st.subheader("Suggested next")
         for n in s.get("next", []):
             st.write(f"`{'+'.join(n['ids'])}`: {n.get('why') or '-'}")
-            st.caption(f"from {n.get('source')}{conf(n.get('confidence'))}")
+            st.caption(f"Suggested by the {n.get('source')}{conf(n.get('confidence'), OWN)}")
         if not s.get("next"):
             st.write("Nothing suggested.")
+        if s.get("not_run"):
+            st.caption(f"Not run this session (over the budget, not ranked by the planner): {', '.join(s['not_run'])}.")
     with right:
         if s["summary"].get("ideas"):
             st.subheader("Ideas")

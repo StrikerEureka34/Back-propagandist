@@ -28,7 +28,7 @@ AI findings ranked + fixes + score · stretch: re-run after a fix, live UI, comb
 ## Agent (one fresh sub-agent per task, one after another)
 1. orchestrator (Groq `gpt-oss-120b`) ranks the pool + candidate pairs
 2. a person approves each run → `bank.measure()`
-3. analyst per run (OpenRouter `nemotron`)
+3. analyst per run (Groq `gpt-oss-20b`, keys 2 then 3; OpenRouter `nemotron` is the last fallback)
 4. `judge.py` groups findings by root cause
 5. fixer per group (`docs/fix-catalog.md`)
 6. orchestrator re-ranks → `report.md`

@@ -125,8 +125,8 @@ Prometheus: http://localhost:9090.
 app.py              the console (Streamlit): dependency map, risk table
 pages/              console pages: Live run (shop health, per-service damage, the bank),
                     Agent (pick faults, approve each run, results ranked by leverage)
-agent.py            the agent: planner + sub-agents (LangGraph), you approve every run
-judge.py            the rules: leverage, resilience score, root causes, safe pairs
+agent.py            the agent: planner (Groq gpt-oss-120b) + analysts (gpt-oss-20b), you approve every run
+judge.py            the rules: leverage, resilience score, root causes, safe pairs, evidence check on AI notes
 depmap.py           builds the dependency map and the risk flags
 chaos.py            runs a krkn experiment, watches it, stops it, cleans up
 bank.py, bank.json  rates each fault high / medium / low from measured effects
