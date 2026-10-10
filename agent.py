@@ -514,8 +514,15 @@ def build(deps: Deps, out: Path):
         return {"summary": summary, "next": state.get("next", [])}
 
     def step(name: str, fn):
-        """Every node saves the session to progress.json when it finishes: the console's live view."""
+        """Every node saves the session to progress.json when it finishes: the console's live view. A run
+        also marks its start: otherwise the first run's fault ran while the page still said "Planned"."""
         def node(state: dict) -> dict:
+            if name == "run_next":
+                try:
+                    started = json.loads((out / "progress.json").read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    started = {}
+                _write(out / "progress.json", {**started, "stage": "run_next"})
             update = fn(state)
             now = {**state, **update}
             _write(out / "progress.json", {

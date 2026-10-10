@@ -318,3 +318,18 @@ def test_at_most_two_leads_per_session(tmp_path):
         return fake_ask({"plan": PLAN, "fixer": FIXER, "final": FINAL})(role, system, prompt, need)
     state = run_session(ask, tmp_path, budget=5)
     assert sum(str(r["item"].get("source", "")).startswith("analyst") for r in state["results"]) == 2
+
+
+def test_progress_says_running_while_the_first_run_is_going(tmp_path):
+    seen = []
+
+    def run(key):
+        seen.append(json.loads((tmp_path / "progress.json").read_text())["stage"])  # mid-fault, as the page sees it
+        return agent.replay(BANK)(key)
+    deps = agent.Deps(ask=fake_ask({"plan": PLAN, "worker": QUIET, "fixer": FIXER, "final": FINAL}), run=run,
+                      approve=lambda item: True,
+                      exps=[{"id": i, "scenario": e["scenario"], "params": e["params"],
+                             "target": "node:chaos-worker" if e["scenario"].startswith("node") else f"opentelemetry.io/name={i}"}
+                            for i, e in BANK.items()], graph={"nodes": {}, "edges": []})
+    agent.session(POOL, 2, deps, tmp_path)
+    assert seen[0] == "run_next"  # it said "plan" until the first run finished
