@@ -305,8 +305,14 @@ def build(deps: Deps, out: Path):
             f"- {i}: {by_id[i].get('note') or by_id[i]['scenario']} | scenario {by_id[i]['scenario']} | "
             f"strength {judge.strength(by_id[i])} | target {_target(by_id[i])} ({_map_facts(deps.graph, _target(by_id[i]))})"
             + (f" | measured before: {deps.prior[i]}" if i in deps.prior else "") for i in pool)
+        with_pairs = deps.pairs and bool(pairs)  # pairs ticked: ranked on merit with the faults, never forced
         prompt = (f"Run budget: {state['budget']} faults. Rank all {len(pool)} candidates; the first ones that "
-                  f"fit the budget run.\nCandidate faults:\n{rows}\n\nCandidate pairs (code-checked):\n"
+                  f"fit the budget run."
+                  + (" Rank the code-checked pairs together with the single faults (a pair counts as one run), "
+                     "but queue a pair only if you expect it to show something neither fault shows alone, and say "
+                     "what in its hypothesis. A pair that just adds two faults' damage up wastes a run."
+                     if with_pairs else "")
+                  + f"\nCandidate faults:\n{rows}\n\nCandidate pairs (code-checked):\n"
                   + ("\n".join(f"- {'+'.join(p['ids'])}: {p['reason']}" for p in pairs) or "- none")
                   + f"\n\nService facts:\n{_doc('service-facts')}\n\n"
                   "Answer with one JSON object shaped like this example (one id per single fault, two "

@@ -232,3 +232,21 @@ def test_the_kill_switch_stops_the_session_between_runs_and_at_a_waiting_card(tm
     assert ran == [] and "kill switch" in state["stopped"]
     assert (out / "report.md").exists()  # the report still covers what ran (nothing, here)
     assert agent.file_approver(tmp_path)({"ids": ["blast-loss"]}) is None  # a card waiting for a person
+
+
+def test_with_pairs_on_the_planner_ranks_them_on_merit_and_none_is_forced(tmp_path):
+    singles = {"queue": [{"ids": [i], "hypothesis": "h", "predicted": "high"} for i in POOL]}
+    prompts, ran = [], []
+
+    def ask(role, system, prompt, need=None):
+        prompts.append(prompt) if need == "queue" else None
+        return fake_ask({"plan": singles, "worker": ANALYST, "fixer": FIXER, "final": FINAL})(role, system, prompt, need)
+    replay = agent.replay(BANK)
+    deps = agent.Deps(ask=ask, run=lambda key: ran.append(key) or replay(key), approve=lambda item: True,
+                      exps=[{"id": i, "scenario": e["scenario"], "params": e["params"],
+                             "target": "node:chaos-worker" if e["scenario"].startswith("node") else f"opentelemetry.io/name={i}"}
+                            for i, e in BANK.items()],
+                      graph={"nodes": {}, "edges": []}, pairs=True)
+    agent.session(POOL, 2, deps, tmp_path)
+    assert "queue a pair only if you expect it to show something neither fault shows alone" in prompts[0]
+    assert not any("+" in key for key in ran)  # the planner chose singles: the code doesn't add a pair
