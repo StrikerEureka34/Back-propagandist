@@ -1,0 +1,35 @@
+{
+  "tier": "low",
+  "effects": [],
+  "fault": "product catalog pod killed",
+  "scenario": "pod-scenarios",
+  "params": {
+    "namespace": "^otel-demo$",
+    "pod-label": "opentelemetry.io/name=product-catalog",
+    "disruption-count": 1,
+    "expected-recovery-time": 120
+  },
+  "recovery_s": 0.0,
+  "shop": {
+    "probes": 37,
+    "failed": 0,
+    "p95_ms": 8,
+    "max_ms": 8
+  },
+  "baseline_p95_ms": 5,
+  "measured_at": "2026-10-10T19:03:00+00:00",
+  "windows": {
+    "baseline": [
+      1791658574,
+      1791658874
+    ],
+    "fault": [
+      1791658878,
+      1791658976
+    ]
+  },
+  "fault_ended_at": 1791658915.5,
+  "recovered_s": 0.0,
+  "recovery_checked_s": 65,
+  "recovery_live": true
+}

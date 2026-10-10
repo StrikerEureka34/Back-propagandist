@@ -1,0 +1,188 @@
+
+
+container runtime: Docker
+
+Environment Value        Value                                   
+NAME_PATTERN             .*                                      
+PROMETHEUS_URL           http://localhost:909...(1 bytes more)   
+WAIT_DURATION            1                                       
+KILL_TIMEOUT             180                                     
+POD_LABEL                opentelemetry.io/nam...(17 bytes more)  
+EXECUTION                serial                                  
+RESILIENCY_ENABLED_MODE  controller                              
+FORCE                    false                                   
+EXPECTED_RECOVERY_TIME   120                                     
+NAMESPACE                ^otel-demo$                             
+DISRUPTION_COUNT         1                                       
+
+✅  signature verified: "containers.krkn-chaos.dev/krkn-chaos/krkn-hub-multiarch:pod-scenarios" is signed by a trusted ecosystem key.
+    running pinned digest containers.krkn-chaos.dev/krkn-chaos/krkn-hub-multiarch@sha256:c83dcd027f3aa2815aa9f7fa4ab726ea3e9613a7a04ee212a95648fe330b6edc
+[1m10-10-2026T19:03:27 Checking if OpenShift client is installed[0m
+/usr/sbin/oc
+[1m10-10-2026T19:03:27 Checking if kubernetes client is installed[0m
+/usr/sbin/kubectl
+2026-10-10 19:03:30,087 [[37mINFO[0m] Starting krkn[0m
+2026-10-10 19:03:30,098 [[37mINFO[0m] Using secure default rollback directory: /home/krkn/.krkn/rollback[0m
+2026-10-10 19:03:30,098 [[37mINFO[0m] Initializing client to talk to the Kubernetes cluster[0m
+2026-10-10 19:03:30,098 [[37mINFO[0m] Generated a uuid for the run: 09867c06-861c-4508-afc3-fa602f749b0e[0m
+2026-10-10 19:03:30,122 [[37mINFO[0m] Detected cluster platform: kubernetes[0m
+2026-10-10 19:03:30,122 [[37mINFO[0m] Fetching cluster info[0m
+2026-10-10 19:03:30,122 [[37mINFO[0m] Cluster version CRD not detected, skipping[0m
+2026-10-10 19:03:30,138 [[37mINFO[0m] Loaded SLO configuration from config/alerts.yaml[0m
+2026-10-10 19:03:30,138 [[37mINFO[0m] Server URL: https://127.0.0.1:33721[0m
+2026-10-10 19:03:30,138 [[37mINFO[0m] Daemon mode not enabled, will run through 1 iterations
+[0m
+2026-10-10 19:03:32,341 [[37mINFO[0m] 📣 `ScenarioPluginFactory`: 21 scenario types loaded (0 failed)[0m
+2026-10-10 19:03:32,341 [[37mINFO[0m] 📣 `HealthCheckFactory`: 9 health check plugins loaded (0 failed)[0m
+2026-10-10 19:03:32,341 [[37mINFO[0m] Scenario plugins for this run:[0m
+2026-10-10 19:03:32,341 [[37mINFO[0m]   ✅ pod_disruption_scenarios ➡️ `PodDisruptionScenarioPlugin`[0m
+2026-10-10 19:03:32,341 [[37mINFO[0m] Started continuous health check plugin 'virt_health_check' reading from config key 'kubevirt_checks'[0m
+2026-10-10 19:03:32,341 [[37mINFO[0m] Executing scenarios for iteration 0[0m
+2026-10-10 19:03:32,345 [[37mINFO[0m] Signal handlers registered globally[0m
+2026-10-10 19:03:32,345 [[37mINFO[0m] Running PodDisruptionScenarioPlugin: ['pod_disruption_scenarios'] -> scenarios/pod_scenario.yaml[0m
+2026-10-10 19:03:32,377 [[37mINFO[0m] Monitoring pods - tracking 2 initial pods[0m
+2026-10-10 19:03:32,377 [[37mINFO[0m] waiting up to 120 seconds for pod recovery, pod label pattern: opentelemetry.io/name=product-catalog namespace pattern: ^otel-demo$[0m
+2026-10-10 19:03:32,569 [[37mINFO[0m] Gracefully deleting pod product-catalog-77fdc87c88-27rfs[0m
+2026-10-10 19:03:39,211 [[37mINFO[0m] Deletion events (1) match new READY pods (1), all disrupted pods restored, stopping monitoring[0m
+2026-10-10 19:03:44,057 [[37mINFO[0m] Pod product-catalog-77fdc87c88-wpplr recovery calculation: deletion_ts=1791659012.6168914, rescheduled_start_ts=1791659012.6411314, rescheduled_ready_ts=1791659019.211558[0m
+2026-10-10 19:03:44,058 [[37mINFO[0m] waiting 1s for cluster to stabilize before collecting metrics[0m
+2026-10-10 19:03:45,155 [[37mINFO[0m] Find cluster events in file /tmp/events.json[0m
+2026-10-10 19:03:45,155 [[37mINFO[0m] Evaluating 29 SLOs over window 2026-10-10 19:03:32 – 2026-10-10 19:03:45[0m
+2026-10-10 19:03:45,202 [[37mINFO[0m] telemetry disabled, skipping cluster metadata collection[0m
+2026-10-10 19:03:45,203 [[37mINFO[0m] Calculated weighted resiliency score: 100/100 (weighted average of 1 scenarios)[0m
+2026-10-10 19:03:45,203 [[37mINFO[0m] Deriving full-run SLO results by merging 1 per-scenario evaluations[0m
+2026-10-10 19:03:45,203 [[37mINFO[0m] Resiliency report written: resiliency-report.json[0m
+2026-10-10 19:03:45,205 [[37mINFO[0m] Chaos data:
+{
+    "telemetry": {
+        "scenarios": [
+            {
+                "start_timestamp": 1791659012,
+                "end_timestamp": 1791659025,
+                "scenario": "scenarios/pod_scenario.yaml",
+                "scenario_type": "pod_disruption_scenarios",
+                "exit_status": 0,
+                "parameters_base64": "",
+                "parameters": [
+                    {
+                        "config": {
+                            "exclude_label": null,
+                            "execution": "serial",
+                            "force": false,
+                            "kill": 1,
+                            "krkn_pod_recovery_time": 120,
+                            "label_selector": "opentelemetry.io/name=product-catalog",
+                            "namespace_pattern": "^otel-demo$",
+                            "node_label_selector": null,
+                            "node_names": null,
+                            "timeout": 180
+                        },
+                        "id": "kill-pods"
+                    }
+                ],
+                "affected_pods": {
+                    "recovered": [
+                        {
+                            "pod_name": "product-catalog-77fdc87c88-wpplr",
+                            "namespace": "otel-demo",
+                            "total_recovery_time": 6.618906736373901,
+                            "pod_readiness_time": 6.5946667194366455,
+                            "pod_rescheduling_time": 0.02424001693725586
+                        }
+                    ],
+                    "unrecovered": [],
+                    "error": null
+                },
+                "affected_vmis": {
+                    "recovered": [],
+                    "unrecovered": [],
+                    "error": null
+                },
+                "affected_nodes": [],
+                "cluster_events": []
+            }
+        ],
+        "node_summary_infos": [],
+        "node_taints": [],
+        "kubernetes_objects_count": {},
+        "network_plugins": [
+            "Unknown"
+        ],
+        "timestamp": "2026-10-10T19:03:30Z",
+        "health_checks": null,
+        "virt_checks": null,
+        "object_state_checks": null,
+        "error_logs": [],
+        "overall_resiliency_report": {
+            "scenarios": {
+                "scenarios/pod_scenario.yaml": 100
+            },
+            "resiliency_score": 100,
+            "passed_slos": 27,
+            "total_slos": 27
+        },
+        "alerts": [],
+        "total_node_count": null,
+        "cloud_infrastructure": null,
+        "cloud_type": null,
+        "cluster_version": null,
+        "major_version": null,
+        "run_uuid": "09867c06-861c-4508-afc3-fa602f749b0e",
+        "job_status": null,
+        "build_url": null,
+        "tag": "",
+        "fips_enabled": false,
+        "etcd_encryption_enabled": false,
+        "ipsec_enabled": false
+    },
+    "critical_alerts": null
+}[0m
+2026-10-10 19:03:45,206 [[37mINFO[0m] 
+================================================================================
+KRKN RUN SUMMARY
+================================================================================
+Run UUID : 09867c06-861c-4508-afc3-fa602f749b0e
+Status   : FAIL
+Cluster  : None (None, None)
+Window   : 2026-10-10 19:03:32 – 19:03:45
+Nodes    : None
+Network  : Unknown
+TARGETS
+  [1] Scenario  : scenarios/pod_scenario.yaml (pod_disruption_scenarios)
+  Label Selector : opentelemetry.io/name=product-catalog
+  Namespace      : ^otel-demo$
+  Pods Disrupted :
+    - otel-demo/product-catalog-77fdc87c88-wpplr
+KEY METRICS
+  [1] Scenario: scenarios/pod_scenario.yaml
+    Exit Status           : PASS (0)
+    Pods Recovered        : 1
+    Pods Unrecovered      : 0
+    Total Recovery Time   : 6.62s
+      ├─ Rescheduling Time: 0.02s
+      └─ Readiness Time   : 6.59s
+ALERTS & SLOs
+  SLOs Evaluated  : 27
+  SLOs Passed     : 27 / 27
+  SLOs Failed     : 0
+  Critical Alerts : None
+RESILIENCY SCORE
+  scenarios/pod_scenario.yaml  : 100 / 100 (weight: 1.0x)
+  Calculation: (100×1.0) ÷ 1.0 = 100
+  Overall Score                : 100 / 100
+================================================================================[0m
+2026-10-10 19:03:45,224 [[37mINFO[0m] PDF report generated: /home/krkn/kraken/kraken.report.pdf[0m
+2026-10-10 19:03:45,224 [[37mINFO[0m] HTML report generated: /home/krkn/kraken/kraken.report.html[0m
+2026-10-10 19:03:45,224 [[37mINFO[0m] api_url not set, skipping telemetry upload.[0m
+2026-10-10 19:03:45,224 [[37mINFO[0m] Kraken UUID for the run: 09867c06-861c-4508-afc3-fa602f749b0e. Report generated at kraken.report.[0m
+2026-10-10 19:03:45,224 [[37mINFO[0m] Successfully finished running Kraken, exiting[0m
+ _         _          
+| | ___ __| | ___ __  
+| |/ / '__| |/ / '_ \ 
+|   <| |  |   <| | | |
+|_|\_\_|  |_|\_\_| |_|
+                      
+
+DEBUG: Attempting to parse resiliency report from 8306 bytes of logs
+Failed to parse resiliency report: resiliency report marker not found in logs
+pod-scenarios ran for 27.966224974s

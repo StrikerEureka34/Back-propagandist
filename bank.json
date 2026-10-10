@@ -91,79 +91,12 @@
     "recovery_checked_s": 900
   },
   "catalog-kill": {
-    "tier": "high",
+    "tier": "low",
     "effects": [
       {
-        "kind": "kill-switch",
-        "what": "error_rate: 3/3 probes failed in last 5s, limit 50%"
-      },
-      {
-        "kind": "shop-down",
-        "what": "3/26 shop probes failed"
-      },
-      {
-        "kind": "no-recovery",
-        "what": "shop not healthy 120 s after the fault"
-      },
-      {
-        "kind": "throughput",
+        "kind": "latency",
         "service": "ad",
-        "what": "ad served 0.52 -> 0.26 req/s"
-      },
-      {
-        "kind": "throughput",
-        "service": "cart",
-        "what": "cart served 1.45 -> 0.5 req/s"
-      },
-      {
-        "kind": "throughput",
-        "service": "currency",
-        "what": "currency served 1.07 -> 0.25 req/s"
-      },
-      {
-        "kind": "throughput",
-        "service": "flagd",
-        "what": "flagd served 9.53 -> 2.76 req/s"
-      },
-      {
-        "kind": "throughput",
-        "service": "frontend-proxy",
-        "what": "frontend-proxy served 18.67 -> 9.08 req/s"
-      },
-      {
-        "kind": "throughput",
-        "service": "image-provider",
-        "what": "image-provider served 4.1 -> 0.53 req/s"
-      },
-      {
-        "kind": "throughput",
-        "service": "recommendation",
-        "what": "recommendation served 0.86 -> 0.27 req/s"
-      },
-      {
-        "kind": "latency",
-        "service": "agent",
-        "what": "agent p95 200 -> 14500 ms"
-      },
-      {
-        "kind": "latency",
-        "service": "flagd",
-        "what": "flagd p95 2 -> 2702 ms"
-      },
-      {
-        "kind": "errors",
-        "service": "frontend",
-        "what": "frontend errors 0% -> 12% (278/2296 calls)"
-      },
-      {
-        "kind": "latency",
-        "service": "frontend",
-        "what": "frontend p95 32 -> 15000 ms"
-      },
-      {
-        "kind": "latency",
-        "service": "frontend-proxy",
-        "what": "frontend-proxy p95 29 -> 4422 ms"
+        "what": "ad p95 47 -> 131 ms"
       }
     ],
     "fault": "product catalog pod killed",
@@ -174,28 +107,29 @@
       "disruption-count": 1,
       "expected-recovery-time": 120
     },
-    "recovery_s": null,
+    "recovery_s": 0.0,
     "shop": {
-      "probes": 26,
-      "failed": 3,
-      "p95_ms": 2000,
-      "max_ms": 2000
+      "probes": 33,
+      "failed": 0,
+      "p95_ms": 6,
+      "max_ms": 7
     },
-    "baseline_p95_ms": 6,
-    "measured_at": "2026-10-10T17:30:41+00:00",
+    "baseline_p95_ms": 5,
+    "measured_at": "2026-10-10T19:08:04+00:00",
     "windows": {
       "baseline": [
-        1791652922,
-        1791653222
+        1791658574,
+        1791658874
       ],
       "fault": [
-        1791653226,
-        1791653436
+        1791659186,
+        1791659279
       ]
     },
-    "fault_ended_at": 1791653256.4,
-    "recovered_s": null,
-    "recovery_checked_s": 190
+    "fault_ended_at": 1791659218.9,
+    "recovered_s": 150,
+    "recovery_checked_s": 155,
+    "recovery_live": true
   },
   "payment-kill": {
     "tier": "low",

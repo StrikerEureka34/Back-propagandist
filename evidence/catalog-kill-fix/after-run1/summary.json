@@ -1,0 +1,26 @@
+{
+  "id": "catalog-kill",
+  "scenario": "pod-scenarios",
+  "aborted": false,
+  "abort_reason": null,
+  "first_bad_probe_to_abort_s": null,
+  "abort_to_stopped_s": null,
+  "duration_s": 37.0,
+  "started_at": 1791658878.5,
+  "ended_at": 1791658915.5,
+  "baseline_p95_ms": 5,
+  "impact": {
+    "probes": 37,
+    "failed": 0,
+    "p95_ms": 8,
+    "max_ms": 8
+  },
+  "recovery_s": 0.0,
+  "krkn_exit": 0,
+  "krkn_failed": false,
+  "krkn": {
+    "total_recovery_time": 3.331270694732666,
+    "pod_readiness_time": 3.161909341812134,
+    "pod_rescheduling_time": 0.16936135292053223
+  }
+}
