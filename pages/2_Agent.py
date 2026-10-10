@@ -109,20 +109,16 @@ def pick():
     with right:
         with st.container(border=True):
             mode = st.radio("Mode", ["Replay the recorded bank", "Live on the cluster"],
-                            help="Replay feeds the agent the bank's measured results, so the whole loop runs "
-                                 "with no cluster. Live injects each fault with krkn through chaos.py's kill switch.")
+                            help="Replay reuses past results, no cluster needed. Live injects real faults.")
             replay = mode.startswith("Replay")
             live_ok = cluster_up()
             if not replay and not live_ok:
                 st.error(f"The shop at {chaos.SHOP} isn't answering. Live runs need the cluster (the Arch box).")
             budget = st.number_input("Run budget", min_value=1, max_value=len(exps), value=min(8, len(exps)),
-                                     help="The most faults this session runs, one at a time (live: about 4 to 5 "
-                                          "minutes each). What doesn't fit becomes a suggestion for next time.")
+                                     help="Max faults to run, one at a time. Live: about 6 min each.")
             auto = st.checkbox("Approve every run automatically", disabled=not replay,
-                               help="Replay only: nothing is injected. Live runs always wait for a person.")
-            pairs = st.checkbox("Also test fault pairs", help="Also tries two faults at once, under one kill switch. "
-                                "The planner picks only from pairs the safety rules allow. You still approve each "
-                                "one. Replay skips pairs the bank hasn't rated.")
+                               help="Replay only. Live runs always wait for you.")
+            pairs = st.checkbox("Also test fault pairs", help="Two faults at once, from safe pairs only. You still approve each.")
             controls = [f"{e['control']['expected']} expected, {'pass' if e['control']['pass'] else 'FAIL'}"
                         for e in rated.values() if "control" in e]
             st.caption(f"Calibration: {len(controls)} known-answer controls in the bank, "
@@ -138,7 +134,7 @@ def pick():
             disabled=["Fault", "What it does", "Strength", "Measured", "Leverage", "Root cause"],
             column_config={"Run": st.column_config.CheckboxColumn("Run", width="small"),
                            "Leverage": st.column_config.NumberColumn(format="%.2f",
-                                                                     help="impact ÷ fault strength (judge.py)")})
+                                                                     help="Damage ÷ how hard we pushed.")})
         pool = table.loc[table["Run"], "Fault"].tolist()
         unrated = [i for i in pool if i not in ranked]
         if replay and unrated:
@@ -201,11 +197,8 @@ def analyst_notes(results: list[dict], newest_first: bool = False):
                 disproved = [why for ok, why in check["checks"] if not ok and "bank measured" in why]
                 if disproved:
                     st.warning("Contradicts the measurement: " + "; ".join(disproved))
-                st.caption(f"Evidence check {check['pct']}%", help=(
-                    "Computed by rules (judge.check_note), not by the model:\n\n"
-                    + "\n".join(f"- {'✓' if ok else '✗'} {why}" for ok, why in check["checks"])
-                    + "\n\nStarts at 100%: -40 for each claim the measurement disproves, -30 if the note "
-                      "names nothing that broke, -20 if an error ratio rests on few calls, -10 without evidence."))
+                st.caption(f"Evidence check {check['pct']}%", help="  \n".join(  # markdown line breaks
+                    f"{'✓' if ok else '✗'} {why}" for ok, why in check["checks"]))
             by = short(a["_by"]) if a.get("_by") else "rules" if str(a.get("why", "")).startswith("(no AI)") else ""
             st.caption((f"By {by}. " if by else "") + f"Evidence: {', '.join(a.get('evidence', [])) or 'none cited'}"
                        + conf(a.get("confidence"), ". Model's own estimate (unchecked) ") + ".")
@@ -243,10 +236,9 @@ def watch(out: Path):
     b = progress.get("budget")
     budget = b if isinstance(b, int) else len(queue)
     left = max(0, min(budget - len(results), len(queue)))
-    c2.metric("Still to run", left, help=f"The budget is {budget} runs. Faults past it are listed for the "
-                                         "next session, not run now.")
+    c2.metric("Still to run", left, help=f"Budget: {budget} runs.")
     c3.metric("Planner", "-" if progress.get("plan_ai") is None else short(progress.get("plan_by"))
-              if progress["plan_ai"] else "rules (no AI)", help="The model that actually answered the plan.")
+              if progress["plan_ai"] else "rules (no AI)", help="The model that made the plan.")
     c4.metric("Status", "Waiting for you" if pending else STAGES.get(progress["stage"], progress["stage"]))
     if pending:
         with st.container(border=True):
@@ -353,19 +345,14 @@ def results_view(out: Path):
     st.caption(f"Session {out.name}" + (f" · stopped: {s['stopped']}" if s.get("stopped") else ""))
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Resilience score", f"{judge.resilience(entries)} / 100",
-              help="SLO points held / points possible x 100, krkn's formula (critical SLOs 3 points, warnings 1) "
-                   "over SLOs that measure what customers feel. A customer page 10x slower or over 2 s counts as "
-                   "no answer. Not krkn's built-in score: it gave 100/100 to a fault that made the shop 66x slower. "
-                   "Details: 'How the scores work' below.")
+              help="How much of what customers need held up. 100 = nothing broke.")
     c2.metric("Root causes found", len(judge.root_causes(ranked)),
-              help="Distinct root-cause tags rated medium or high, each exposed by a mild or targeted fault. "
-                   "Broad faults (a node at full CPU, a traffic flood) don't count: breaking everything proves nothing.")
+              help="Separate weaknesses found by small faults.")
     blind = s.get("plan_blind")
     c3.metric("Planner hit rate", f"{hits} / {judged}" if judged else "not scored",
-              help="How often the planner's predicted tier matched the measured one. " + (
-                  "It planned blind (replay), so this is a real test of its reasoning." if blind else
-                  "It saw the bank's earlier ratings (live), so a high hit rate is partly memory." if blind is False
-                  else "Not scored when the planner made no predictions."))
+              help="Guesses the planner got right. " + (
+                  "It guessed blind." if blind else "It saw past results, so it's partly memory." if blind is False
+                  else ""))
     c4.metric("Runs", f"{len(results)} / {s['budget']}")
     with st.container(border=True):
         st.write(s["summary"]["text"])
@@ -404,19 +391,13 @@ def results_view(out: Path):
         "Decided by": r["decided_by"],
         "Evidence check": f"{notes[r['id']]['check']['pct']}%" if notes[r["id"]].get("check") else "-",
     } for n, r in enumerate(found, 1)]), hide_index=True, width="stretch", height="content", column_config={
-        "Tier": st.column_config.TextColumn(help="Measured by the bank (bank.py): high = customers hit errors or lose "
-                                                 "data, or no recovery; medium = other services error or customers are "
-                                                 "2x slower; low = less."),
-        "Strength": st.column_config.TextColumn(help="How hard we pushed: mild 1 (partial: latency, loss, memory), "
-                                                     "targeted 2 (one service), broad 3 (a whole node, the front door)."),
-        "Leverage": st.column_config.TextColumn(help="Impact points (high 3, medium 2, low 1) ÷ strength points. "
-                                                     "A big effect from a small fault ranks first."),
-        "SLO points": st.column_config.TextColumn(help="SLO points held / possible for this fault (critical 3, warning 1)."),
-        "Root cause": st.column_config.TextColumn(help="A tag from what broke. Findings with the same tag likely "
-                                                       "share one fix."),
-        "Decided by": st.column_config.TextColumn(help="The measured effect that set the root-cause tag."),
-        "Evidence check": st.column_config.TextColumn(help="Rules' check of the analyst's note; open the note below "
-                                                           "for each test."),
+        "Tier": st.column_config.TextColumn(help="How bad it was for customers, as measured."),
+        "Strength": st.column_config.TextColumn(help="How hard we pushed: mild, targeted or broad."),
+        "Leverage": st.column_config.TextColumn(help="Damage ÷ push. Big damage from a small push ranks first."),
+        "SLO points": st.column_config.TextColumn(help="Checks that held, out of the total."),
+        "Root cause": st.column_config.TextColumn(help="Same tag, likely the same fix."),
+        "Decided by": st.column_config.TextColumn(help="The measurement behind the root cause."),
+        "Evidence check": st.column_config.TextColumn(help="How well the AI's note matches the data."),
     })
     st.caption("Why each one broke is in the analyst notes below.")
 

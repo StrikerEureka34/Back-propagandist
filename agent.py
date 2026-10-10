@@ -570,22 +570,12 @@ def _pct(value) -> str:
 
 def how_scores_work() -> list[str]:
     """The scoring rules in words: one source for the report and the console."""
-    slos = "; ".join(f"{name} ({points} pt{'s' if points > 1 else ''})" for name, points, _, _ in judge.SLOS)
     return [
-        "- **Leverage** = impact ÷ fault strength. Impact is the bank's measured tier (high 3, medium 2, "
-        "low 1); strength is how hard we pushed (mild 1, targeted 2, broad 3; a pair adds its two). A big "
-        "effect from a small fault ranks first, and \"broke everything, everything broke\" sinks.",
-        "- **Resilience score** = SLO points held ÷ points possible × 100: krkn's formula (critical SLOs "
-        f"3 points, warnings 1) over SLOs that measure what customers feel: {slos}. A customer page "
-        f"{judge.BIG_SLOWDOWN_X}x slower than usual, or over {judge.BIG_SLOWDOWN_MS / 1000:g} s, also breaks "
-        "\"customers get answers\". We don't use krkn's built-in score: it gave 100/100 to a fault that "
-        "made the shop 66x slower (docs/decisions-and-lessons.md).",
-        "- **Evidence check** on each analyst note, from rules: it starts at 100%; -40 for each claim the "
-        "measurement disproves (\"no data loss\" when carts were lost), -30 if the note names nothing that "
-        f"broke, -20 if an error ratio rests on fewer than {judge.SMALL_SAMPLE} calls, -10 if it cites no "
-        "evidence. The model's own estimate is shown next to it, unchecked.",
-        "- **Planner hit rate** = predicted tier equals measured tier. In replay the planner plans blind; "
-        "live, it sees the bank's earlier ratings, so a high hit rate there is partly memory.",
+        "- **Leverage**: damage ÷ how hard we pushed. Big damage from a small push ranks first.",
+        "- **Resilience score**: how many customer checks held, out of 100. Serious checks count 3, minor "
+        f"ones 1. A page {judge.BIG_SLOWDOWN_X}x slower or over {judge.BIG_SLOWDOWN_MS / 1000:g} s counts as no answer.",
+        "- **Evidence check**: rules compare each AI note with the data. A claim the data disproves costs 40%.",
+        "- **Hit rate**: the planner's guesses that came true.",
     ]
 
 
