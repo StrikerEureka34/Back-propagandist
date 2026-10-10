@@ -17,6 +17,7 @@ font = "'IBM Plex Sans':https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:w
 headingFont = "Fraunces:https://fonts.googleapis.com/css2?family=Fraunces:wght@400;500&display=swap"
 codeFont = "'IBM Plex Mono':https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&display=swap"
 chartCategoricalColors = ["#1C5CAB", "#199E70", "#C98500", "#D55181", "#4A3AA7"] # chart-1..5
+chartSequentialColors = ["#F5F2EA", "#EEDBD3", "#E7C4BB", "#DFADA4", "#D8968D", "#D17F75", "#CA685E", "#C25147", "#BB3A2F", "#B42318"] # heat-0..9
 headingFontWeights = 500             # Fraunces loads 400/500 only; 600+ would be faux bold
 headingFontSizes = ["44px", "32px", "21px", "19px", "16px", "14px"] # h1, h2, h3, then body-lg, body, small
 metricValueFontSize = "32px"         # h2: a stat tile shouldn't outshout the page heading

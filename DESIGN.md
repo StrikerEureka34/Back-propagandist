@@ -21,6 +21,16 @@ colors:
   chart-3: "#C98500"
   chart-4: "#D55181"
   chart-5: "#4A3AA7"
+  heat-0: "#F5F2EA"
+  heat-1: "#EEDBD3"
+  heat-2: "#E7C4BB"
+  heat-3: "#DFADA4"
+  heat-4: "#D8968D"
+  heat-5: "#D17F75"
+  heat-6: "#CA685E"
+  heat-7: "#C25147"
+  heat-8: "#BB3A2F"
+  heat-9: "#B42318"
 typography:
   display:
     fontFamily: Fraunces
@@ -163,6 +173,9 @@ screen are vermilion, one of them is wrong.
   so charts that use it need direct labels or a table view next to them.
   Highlight one series by keeping it in its color and graying the rest
   with `line`, not by switching it to `primary`.
+- `heat-0` to `heat-9` are one sequential ramp from `background` to `error`, for damage heatmaps
+  only (more damage = redder). Keep the darkest filled cell at about `heat-6` so `on-surface`
+  labels stay readable on it. Never use the ramp for a single highlight.
 - Checked contrast (WCAG): on-surface/background 16.3, muted/background 6.4,
   on-primary/primary 5.2, primary/background 4.6.
 

@@ -14,6 +14,7 @@ import streamlit as st
 
 import bank
 import chaos
+import heat
 
 URL = f"{chaos.SHOP}/api/products"
 SECONDS_SHOWN = 120
@@ -127,18 +128,35 @@ def services():
             st.caption("Same rules as the fault bank (bank.py), last 3 minutes against 5 to 15 "
                        "minutes ago. A fault running over 5 minutes becomes part of 'usual'.")
     with left:
-        rows = []
-        for svc in sorted(set(usual["services"]) | set(now["services"])):
-            u, n = usual["services"].get(svc, {}), now["services"].get(svc, {})
-            rows.append({"Service": svc, "Req/s": pair(n.get("rps", 0.0), u.get("rps")),
-                         "Errors %": pair(pct(n), pct(u)), "p95 ms": pair(n.get("p95_ms"), u.get("p95_ms"))})
-        rows.sort(key=lambda r: (r["Service"] not in flagged, r["Service"]))
-        st.dataframe(rows, hide_index=True, width="stretch", height=35 * (len(rows) + 1) + 3)
-        st.caption("Each cell is now / usual. Services with something wrong are listed first.")
+        st.altair_chart(heat.service_chart(usual, now), width="stretch")
+        st.caption("Last 3 minutes against usual. Redder = worse. Hover a cell for the numbers.")
+        if st.toggle("Show the numbers", key="service_numbers"):
+            rows = []
+            for svc in sorted(set(usual["services"]) | set(now["services"])):
+                u, n = usual["services"].get(svc, {}), now["services"].get(svc, {})
+                rows.append({"Service": svc, "Req/s": pair(n.get("rps", 0.0), u.get("rps")),
+                             "Errors %": pair(pct(n), pct(u)), "p95 ms": pair(n.get("p95_ms"), u.get("p95_ms"))})
+            rows.sort(key=lambda r: (r["Service"] not in flagged, r["Service"]))
+            st.dataframe(rows, hide_index=True, width="stretch", height="content")
+            st.caption("Each cell is now / usual.")
 
 
 live()
 services()
 
 with st.expander("Fault bank: every fault we have run, rated by measured damage"):
-    st.markdown(bank.show() if bank.BANK.exists() else "No fault has been rated yet: uv run python bank.py run all")
+    rated = bank.load()
+    if not rated:
+        st.write("No fault has been rated yet: uv run python bank.py run all")
+    else:
+        blast = heat.blast_chart(rated)
+        if blast is not None:
+            st.altair_chart(blast, width="stretch")
+            st.caption("Which services each fault hurt. Redder = worse. Hover a cell for what was measured.")
+        order = {"high": 0, "medium": 1, "low": 2}
+        st.dataframe(pd.DataFrame([{"Tier": e["tier"], "Fault": f, "What it is": e.get("fault", ""),
+                                    "Worst effect": heat.worst(e), "Damage gone": bank.recovered_text(e)}
+                                   for f, e in sorted(rated.items(), key=lambda kv: (order[kv[1]["tier"]], kv[0]))]),
+                     hide_index=True, width="stretch", height="content")
+        if st.toggle("Show every effect", key="bank_effects"):
+            st.markdown(bank.show())
