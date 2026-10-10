@@ -139,10 +139,21 @@ def tier(effs: list[dict]) -> str:
     return "low"
 
 
+def pause(until: float) -> None:
+    """Sleeps until `until` (epoch s). A person's stop ends the wait: whatever fault ran is already over,
+    and the half-measured run isn't rated."""
+    while (left := until - time.time()) > 0:
+        if chaos.stop_requested():
+            sys.exit("stopped by hand: not rated")
+        time.sleep(min(1.0, left))
+
+
 def wait_healthy(url: str, streak: int = 5, timeout_s: int = 300) -> bool:
     """Before the next fault: the last one's damage may still be healing (catalog-kill took ~3 min)."""
     t0, ok_in_a_row = time.monotonic(), 0
     while time.monotonic() - t0 < timeout_s:
+        if chaos.stop_requested():
+            sys.exit("stopped by hand: no new fault")
         ok, _ = chaos.probe_once(url)
         ok_in_a_row = ok_in_a_row + 1 if ok else 0
         if ok_in_a_row >= streak:
@@ -164,7 +175,7 @@ def recovery(entry: dict, target: str, ended_at: float, until: float, window_fn=
     t = ended_at + MIN_WINDOW_S
     while t <= until:
         if live:  # measuring as it happens: wait for the minute's metrics to land
-            time.sleep(max(0.0, t + 5 - time.time()))
+            pause(t + 5)
         now = window_fn(t - MIN_WINDOW_S, t)
         left = {(e["kind"], e.get("service")) for e in effects(baseline, now, {}, {}, QUIET_RUN, target)}
         if not damage & left:
@@ -201,6 +212,8 @@ def load() -> dict:
 def measure(exp_id: str, baseline: dict) -> dict:
     """Runs one fault and rates it. Holds the run lock from injection to the end of the rating
     window, so no other fault lands in it."""
+    if chaos.stop_requested():  # checked before chaos.run, which clears a stale STOP
+        sys.exit("stopped by hand: no new fault")
     with chaos.exclusive(exp_id):
         return _measure(exp_id, baseline)
 
@@ -218,7 +231,7 @@ def _measure(exp_id: str, baseline: dict) -> dict:
     # window runs until the shop recovered, plus SCRAPE_S because span metrics arrive a minute late.
     settle = summary["recovery_s"] if summary["recovery_s"] is not None else chaos.RECOVER_TIMEOUT_S
     end = summary["ended_at"] + settle + SCRAPE_S
-    time.sleep(max(0.0, end + 5 - time.time()))
+    pause(end + 5)
     during = window(summary["started_at"], end)
     effs = effects(baseline, during, pods_before, chaos.pods(), summary, exp["target"])
     entry = {
@@ -284,6 +297,7 @@ if __name__ == "__main__":
     elif sys.argv[1:2] == ["run"] and len(sys.argv) > 2:
         ids = [e["id"] for e in chaos.load_experiments()] if sys.argv[2:] == ["all"] else sys.argv[2:]
         # ponytail: one baseline per invocation; re-run soon after another fault and it is dirty
+        (chaos.RUNS / "STOP").unlink(missing_ok=True)  # a stop from an earlier run
         t0 = time.time()
         baseline = window(t0 - BASELINE_S, t0)
         for exp_id in ids:

@@ -218,3 +218,17 @@ def test_leftovers_the_planner_never_ranked_are_not_suggestions(tmp_path):
     suggested = {"+".join(n["ids"]) for n in state["next"]}
     assert state["not_run"] and not set(state["not_run"]) & suggested
     assert state["plan_blind"] is True  # replay: the planner saw no earlier ratings
+
+
+def test_the_kill_switch_stops_the_session_between_runs_and_at_a_waiting_card(tmp_path, monkeypatch):
+    monkeypatch.setattr(agent.chaos, "RUNS", tmp_path)
+    (tmp_path / "STOP").write_text("")
+    ran = []
+    deps = agent.Deps(ask=fake_ask({}), run=lambda key: ran.append(key) or {}, approve=lambda item: True,
+                      exps=[{"id": i, "scenario": BANK[i]["scenario"], "params": BANK[i]["params"],
+                             "target": f"opentelemetry.io/name={i}"} for i in POOL], graph={"nodes": {}, "edges": []})
+    out = tmp_path / "session"
+    state = agent.session(POOL, 3, deps, out)
+    assert ran == [] and "kill switch" in state["stopped"]
+    assert (out / "report.md").exists()  # the report still covers what ran (nothing, here)
+    assert agent.file_approver(tmp_path)({"ids": ["blast-loss"]}) is None  # a card waiting for a person

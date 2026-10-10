@@ -157,14 +157,14 @@ def live() -> Callable[[str], dict]:
 
     def run(exp_id: str) -> dict:
         exp = next(e for e in chaos.load_experiments() if e["id"] == exp_id.split("+")[0])
-        if not bank.wait_healthy(exp["probe_url"]):
-            return {"stopped": "shop still unhealthy 5 min after the last fault"}
-        first, state["first"] = state["first"], False
-        if not first:
-            time.sleep(bank.MIN_WINDOW_S)  # a clean baseline window after the last fault
-        t0 = time.time()
-        baseline = bank.window(t0 - (bank.BASELINE_S if first else bank.MIN_WINDOW_S), t0)
-        try:
+        try:  # every wait below ends early on a person's stop (runs/STOP), with SystemExit
+            if not bank.wait_healthy(exp["probe_url"]):
+                return {"stopped": "shop still unhealthy 5 min after the last fault"}
+            first, state["first"] = state["first"], False
+            if not first:
+                bank.pause(time.time() + bank.MIN_WINDOW_S)  # a clean baseline window after the last fault
+            t0 = time.time()
+            baseline = bank.window(t0 - (bank.BASELINE_S if first else bank.MIN_WINDOW_S), t0)
             entry = bank.measure(exp_id, baseline)
         except SystemExit as e:  # a person stopped it (STOP file / Ctrl+C) or the shop was unhealthy
             return {"stopped": str(e)}
@@ -202,6 +202,9 @@ def file_approver(ui_dir: Path) -> Callable[[dict], bool | None]:
         decision.unlink(missing_ok=True)
         _write(pending, item)
         while not decision.exists():
+            if chaos.stop_requested():  # the page's kill switch while a card waits
+                pending.unlink(missing_ok=True)
+                return None
             time.sleep(0.5)
         choice = json.loads(decision.read_text(encoding="utf-8")).get("decision")
         decision.unlink(missing_ok=True)
@@ -342,6 +345,8 @@ def build(deps: Deps, out: Path):
                 "rejected_pairs": rejected}
 
     def run_next(state: dict) -> dict:
+        if chaos.stop_requested():  # kill switch pressed between runs: nothing new starts
+            return {"stopped": "a person pressed the kill switch"}
         item, rest = state["queue"][0], state["queue"][1:]
         key = "+".join(item["ids"])
         decision = deps.approve(item)
@@ -622,6 +627,7 @@ def main(argv: list[str] | None = None):
     p.add_argument("--out", help="output dir (default runs/session-<time>)")
     p.add_argument("--ui", action="store_true", help="approvals come from the console (files in --out)")
     args = p.parse_args(argv)
+    (chaos.RUNS / "STOP").unlink(missing_ok=True)  # a new session: a stop from an earlier one doesn't count
     for stream in (sys.stdout, sys.stderr):  # model text has characters a Windows console can't print
         stream.reconfigure(errors="replace")  # type: ignore[attr-defined]
     exps = chaos.load_experiments()

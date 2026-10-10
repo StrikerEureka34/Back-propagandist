@@ -115,6 +115,11 @@ def exclusive(what: str):
         f.close()
 
 
+def stop_requested() -> bool:
+    """A person pressed stop (the Live run or Agent page, or `touch runs/STOP`)."""
+    return (RUNS / "STOP").exists()
+
+
 def krkn_command(exp: dict) -> list[str]:
     cmd = ["krknctl", "run", exp["scenario"], "--wait-duration", "1", "--prometheus-url", PROM]
     for flag, value in exp["params"].items():

@@ -1,3 +1,5 @@
+import time
+
 import pytest
 
 import bank
@@ -146,3 +148,14 @@ def test_a_fault_with_no_metric_damage_has_nothing_to_recover_and_noise_elsewher
     other_noise = win({"checkout": svc(20), "ad": svc(20, 10)})
     fake = lambda start, end: win({"checkout": svc(20), "ad": svc(20)}) if end == 300 else other_noise
     assert bank.recovery(entry, "", 1000, 5000, fake) == bank.MIN_WINDOW_S
+
+
+def test_a_stop_ends_the_rating_wait_and_no_new_fault_starts(tmp_path, monkeypatch):
+    monkeypatch.setattr(chaos, "RUNS", tmp_path)
+    (tmp_path / "STOP").write_text("")
+    t0 = time.time()
+    with pytest.raises(SystemExit, match="not rated"):
+        bank.pause(t0 + 60)  # the 1-15 min wait after a fault
+    assert time.time() - t0 < 2
+    with pytest.raises(SystemExit, match="no new fault"):
+        bank.measure("payment-kill", {})  # refused before chaos.run, which would clear the STOP
