@@ -1,0 +1,204 @@
+{
+ "data": [
+  {
+   "parent": "accounting",
+   "child": "accounting",
+   "callCount": 6
+  },
+  {
+   "parent": "ad",
+   "child": "ad",
+   "callCount": 169
+  },
+  {
+   "parent": "agent",
+   "child": "agent",
+   "callCount": 271
+  },
+  {
+   "parent": "agent",
+   "child": "frontend",
+   "callCount": 15
+  },
+  {
+   "parent": "cart",
+   "child": "cart",
+   "callCount": 60
+  },
+  {
+   "parent": "cart",
+   "child": "flagd",
+   "callCount": 3
+  },
+  {
+   "parent": "checkout",
+   "child": "cart",
+   "callCount": 5
+  },
+  {
+   "parent": "checkout",
+   "child": "checkout",
+   "callCount": 25
+  },
+  {
+   "parent": "checkout",
+   "child": "currency",
+   "callCount": 4
+  },
+  {
+   "parent": "checkout",
+   "child": "email",
+   "callCount": 2
+  },
+  {
+   "parent": "checkout",
+   "child": "payment",
+   "callCount": 1
+  },
+  {
+   "parent": "checkout",
+   "child": "product-catalog",
+   "callCount": 2
+  },
+  {
+   "parent": "checkout",
+   "child": "shipping",
+   "callCount": 4
+  },
+  {
+   "parent": "email",
+   "child": "email",
+   "callCount": 6
+  },
+  {
+   "parent": "flagd",
+   "child": "flagd",
+   "callCount": 237
+  },
+  {
+   "parent": "fraud-detection",
+   "child": "flagd",
+   "callCount": 1
+  },
+  {
+   "parent": "fraud-detection",
+   "child": "fraud-detection",
+   "callCount": 4
+  },
+  {
+   "parent": "frontend",
+   "child": "ad",
+   "callCount": 22
+  },
+  {
+   "parent": "frontend",
+   "child": "cart",
+   "callCount": 27
+  },
+  {
+   "parent": "frontend",
+   "child": "checkout",
+   "callCount": 3
+  },
+  {
+   "parent": "frontend",
+   "child": "currency",
+   "callCount": 56
+  },
+  {
+   "parent": "frontend",
+   "child": "frontend",
+   "callCount": 1665
+  },
+  {
+   "parent": "frontend",
+   "child": "product-catalog",
+   "callCount": 174
+  },
+  {
+   "parent": "frontend-proxy",
+   "child": "flagd",
+   "callCount": 13
+  },
+  {
+   "parent": "frontend-proxy",
+   "child": "frontend",
+   "callCount": 1183
+  },
+  {
+   "parent": "frontend-proxy",
+   "child": "frontend-proxy",
+   "callCount": 1542
+  },
+  {
+   "parent": "frontend-proxy",
+   "child": "image-provider",
+   "callCount": 218
+  },
+  {
+   "parent": "frontend",
+   "child": "recommendation",
+   "callCount": 61
+  },
+  {
+   "parent": "frontend",
+   "child": "shipping",
+   "callCount": 1
+  },
+  {
+   "parent": "frontend-web",
+   "child": "frontend-proxy",
+   "callCount": 504
+  },
+  {
+   "parent": "frontend-web",
+   "child": "frontend-web",
+   "callCount": 1005
+  },
+  {
+   "parent": "payment",
+   "child": "flagd",
+   "callCount": 2
+  },
+  {
+   "parent": "payment",
+   "child": "payment",
+   "callCount": 5
+  },
+  {
+   "parent": "product-catalog",
+   "child": "product-catalog",
+   "callCount": 218
+  },
+  {
+   "parent": "quote",
+   "child": "quote",
+   "callCount": 6
+  },
+  {
+   "parent": "recommendation",
+   "child": "flagd",
+   "callCount": 1
+  },
+  {
+   "parent": "recommendation",
+   "child": "product-catalog",
+   "callCount": 41
+  },
+  {
+   "parent": "recommendation",
+   "child": "recommendation",
+   "callCount": 169
+  },
+  {
+   "parent": "shipping",
+   "child": "quote",
+   "callCount": 3
+  },
+  {
+   "parent": "shipping",
+   "child": "shipping",
+   "callCount": 3
+  }
+ ]
+}

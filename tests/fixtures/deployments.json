@@ -1,0 +1,45 @@
+{
+ "_source": "kubectl get deploy -o json shape; env, ports and volumes transcribed from opentelemetry-demo chart 0.42.3 values.yaml (other fields trimmed)",
+ "items": [
+  {"kind": "Deployment", "metadata": {"name": "frontend"}, "spec": {"replicas": 1, "template": {"spec": {"containers": [{"ports": [{"containerPort": 8080}], "env": [
+   {"name": "FRONTEND_ADDR", "value": "frontend:8080"}, {"name": "AD_ADDR", "value": "ad:8080"}, {"name": "CART_ADDR", "value": "cart:8080"},
+   {"name": "CHECKOUT_ADDR", "value": "checkout:8080"}, {"name": "CURRENCY_ADDR", "value": "currency:8080"},
+   {"name": "PRODUCT_CATALOG_ADDR", "value": "product-catalog:8080"}, {"name": "RECOMMENDATION_ADDR", "value": "recommendation:8080"},
+   {"name": "SHIPPING_ADDR", "value": "http://shipping:8080"}, {"name": "FLAGD_HOST", "value": "flagd"},
+   {"name": "WEB_OTEL_SERVICE_NAME", "value": "frontend-web"}, {"name": "PORT", "value": "$(FRONTEND_PORT)"}]}]}}}},
+  {"kind": "Deployment", "metadata": {"name": "cart"}, "spec": {"replicas": 1, "template": {"spec": {"containers": [{"ports": [{"containerPort": 8080}], "env": [
+   {"name": "VALKEY_ADDR", "value": "valkey-cart:6379"}, {"name": "FLAGD_HOST", "value": "flagd"},
+   {"name": "OPAMP_SERVER_ENDPOINT", "value": "ws://opamp-server:4320/v1/opamp"}]}]}}}},
+  {"kind": "Deployment", "metadata": {"name": "checkout"}, "spec": {"replicas": 1, "template": {"spec": {"containers": [{"ports": [{"containerPort": 8080}], "env": [
+   {"name": "CART_ADDR", "value": "cart:8080"}, {"name": "CURRENCY_ADDR", "value": "currency:8080"}, {"name": "EMAIL_ADDR", "value": "http://email:8080"},
+   {"name": "PAYMENT_ADDR", "value": "payment:8080"}, {"name": "PRODUCT_CATALOG_ADDR", "value": "product-catalog:8080"},
+   {"name": "SHIPPING_ADDR", "value": "http://shipping:8080"}, {"name": "KAFKA_ADDR", "value": "kafka:9092"}, {"name": "FLAGD_HOST", "value": "flagd"}]}]}}}},
+  {"kind": "Deployment", "metadata": {"name": "product-catalog"}, "spec": {"replicas": 1, "template": {"spec": {"containers": [{"ports": [{"containerPort": 8080}], "env": [
+   {"name": "FLAGD_HOST", "value": "flagd"},
+   {"name": "DB_CONNECTION_STRING", "value": "postgres://astronomy_user:astronomy_password@astronomy-db/astronomy_db?sslmode=disable"}]}]}}}},
+  {"kind": "Deployment", "metadata": {"name": "accounting"}, "spec": {"replicas": 1, "template": {"spec": {"containers": [{"env": [
+   {"name": "KAFKA_ADDR", "value": "kafka:9092"},
+   {"name": "DB_CONNECTION_STRING", "value": "Host=astronomy-db;Username=astronomy_user;Password=astronomy_password;Database=astronomy_db"}]}]}}}},
+  {"kind": "Deployment", "metadata": {"name": "fraud-detection"}, "spec": {"replicas": 1, "template": {"spec": {"containers": [{"env": [
+   {"name": "KAFKA_ADDR", "value": "kafka:9092"}, {"name": "FLAGD_HOST", "value": "flagd"}]}]}}}},
+  {"kind": "Deployment", "metadata": {"name": "recommendation"}, "spec": {"replicas": 1, "template": {"spec": {"containers": [{"ports": [{"containerPort": 8080}], "env": [
+   {"name": "PRODUCT_CATALOG_ADDR", "value": "product-catalog:8080"}, {"name": "FLAGD_HOST", "value": "flagd"}]}]}}}},
+  {"kind": "Deployment", "metadata": {"name": "shipping"}, "spec": {"replicas": 1, "template": {"spec": {"containers": [{"ports": [{"containerPort": 8080}], "env": [
+   {"name": "QUOTE_ADDR", "value": "http://quote:8080"}, {"name": "FLAGD_HOST", "value": "flagd"}]}]}}}},
+  {"kind": "Deployment", "metadata": {"name": "payment"}, "spec": {"replicas": 1, "template": {"spec": {"containers": [{"ports": [{"containerPort": 8080}], "env": [
+   {"name": "FLAGD_HOST", "value": "flagd"}]}]}}}},
+  {"kind": "Deployment", "metadata": {"name": "currency"}, "spec": {"replicas": 1, "template": {"spec": {"containers": [{"ports": [{"containerPort": 8080}]}]}}}},
+  {"kind": "Deployment", "metadata": {"name": "email"}, "spec": {"replicas": 1, "template": {"spec": {"containers": [{"ports": [{"containerPort": 8080}]}]}}}},
+  {"kind": "Deployment", "metadata": {"name": "quote"}, "spec": {"replicas": 1, "template": {"spec": {"containers": [{"ports": [{"containerPort": 8080}]}]}}}},
+  {"kind": "Deployment", "metadata": {"name": "ad"}, "spec": {"replicas": 1, "template": {"spec": {"containers": [{"ports": [{"containerPort": 8080}], "env": [
+   {"name": "FLAGD_HOST", "value": "flagd"}]}]}}}},
+  {"kind": "Deployment", "metadata": {"name": "flagd"}, "spec": {"replicas": 1, "template": {"spec": {"containers": [{"ports": [{"containerPort": 8013}]}]}}}},
+  {"kind": "Deployment", "metadata": {"name": "opamp-server"}, "spec": {"replicas": 1, "template": {"spec": {"containers": [{"ports": [{"containerPort": 4320}]}]}}}},
+  {"kind": "Deployment", "metadata": {"name": "valkey-cart"}, "spec": {"replicas": 1, "template": {"spec": {"containers": [{"ports": [{"containerPort": 6379}]}]}}}},
+  {"kind": "Deployment", "metadata": {"name": "kafka"}, "spec": {"replicas": 1, "template": {"spec": {"containers": [{"ports": [{"containerPort": 9092}, {"containerPort": 9093}], "env": [
+   {"name": "KAFKA_ADVERTISED_LISTENERS", "value": "PLAINTEXT://kafka:9092"}, {"name": "KAFKA_CONTROLLER_QUORUM_VOTERS", "value": "1@kafka:9093"}]}]}}}},
+  {"kind": "Deployment", "metadata": {"name": "astronomy-db"}, "spec": {"replicas": 1, "template": {"spec": {
+   "containers": [{"ports": [{"containerPort": 5432}], "env": [{"name": "POSTGRES_PASSWORD", "value": "changeit"}]}],
+   "volumes": [{"name": "postgresql-init", "configMap": {"name": "postgresql-init"}}]}}}}
+ ]
+}
