@@ -12,10 +12,8 @@ rewarding "break everything". Statement: `docs/hackathon-problem-statement.md`.
 - Baseline: Day 1 had no AI ranking and no verified fix.
 
 **Repro:** `uv run python agent.py --pool <ids> --budget 8` (Arch box). On any laptop: `--replay bank.json`
-**Rubric:** none supplied. Day-2 checklist:
-- AI planner (map-based, with reasons) · ≥3 failure types run · AI findings ranked + fixes + score
-- stretch: re-run after a fix, live UI, combined failures
-- 5 deliverables
+**Rubric:** none supplied. Day-2 checklist: AI planner (map-based, with reasons) · ≥3 failure types run ·
+AI findings ranked + fixes + score · stretch: re-run after a fix, live UI, combined failures · 5 deliverables
 
 **Start:** S, then feature freeze S+5:30, code freeze S+7:00, submit S+9:00 (aim 30 min early)
 
@@ -24,12 +22,8 @@ rewarding "break everything". Statement: `docs/hackathon-problem-statement.md`.
   targeted 2 / broad 3). From `bank.json`: blast-loss 3.0 > catalog-kill 1.5 > cpu-starve 0.67
 - **The resilience score rates the system:** krkn's formula (critical 3 pts, warning 1 pt;
   passed / total × 100). It's computed over the pool fixed at session start and compared before/after a fix.
-- **Guards:**
-  - one target per run
-  - no namespace-wide or steady-node faults
-  - the kill switch is active (traffic-spike: blast radius + STOP only, intended)
-  - the controls must pass
-  - a person approves each run
+- **Guards:** one target per run · no namespace-wide or steady-node faults · kill switch active
+  (traffic-spike: blast radius + STOP only, intended) · controls must pass · a person approves each run
 
 ## Agent (one fresh sub-agent per task, one after another)
 1. orchestrator (Groq `gpt-oss-120b`) ranks the pool + candidate pairs
