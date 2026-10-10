@@ -1,0 +1,18 @@
+# Tokens from DESIGN.md ("Paper & Signal"). DESIGN.md is the source of truth:
+# change a value there first, then mirror it here.
+[theme]
+base = "light"
+primaryColor = "#C2410C"             # colors.primary
+backgroundColor = "#F5F2EA"          # colors.background
+secondaryBackgroundColor = "#FBFAF6" # colors.surface
+textColor = "#17150F"                # colors.on-surface
+linkColor = "#C2410C"                # colors.primary
+borderColor = "#DDD6C7"              # colors.line
+dataframeBorderColor = "#DDD6C7"     # colors.line
+showWidgetBorder = true
+redColor = "#B42318"                 # colors.error
+baseRadius = "4px"                   # rounded.sm
+font = "'IBM Plex Sans':https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600&display=swap"
+headingFont = "Fraunces:https://fonts.googleapis.com/css2?family=Fraunces:wght@400;500&display=swap"
+codeFont = "'IBM Plex Mono':https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&display=swap"
+chartCategoricalColors = ["#1C5CAB", "#199E70", "#C98500", "#D55181", "#4A3AA7"] # chart-1..5
