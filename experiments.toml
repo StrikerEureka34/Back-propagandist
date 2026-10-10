@@ -44,12 +44,12 @@ target = "node:chaos-worker"
 probe_url = "http://localhost:8080/api/products"
 [experiment.params]
 chaos-duration = 60
-cpu-percentage = 80
+cpu-percentage = 100
 namespace = "otel-demo"
 node-selector = "kubernetes.io/hostname=chaos-worker"
 [experiment.abort_if]
 error_rate = 0.5
-p95_ms = 3000
+p95_ms = 250 # baseline is ~5-30 ms
 max_s = 240
 
 # stretch
