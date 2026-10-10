@@ -10,7 +10,7 @@
       {
         "kind": "errors",
         "service": "payment",
-        "what": "payment errors 0% -> 100% (12/12 calls)"
+        "what": "payment errors 0% -> 100% (13/13 calls)"
       }
     ],
     "fault": "control: every charge fails",
@@ -24,28 +24,29 @@
     "shop": {
       "probes": 120,
       "failed": 0,
-      "p95_ms": 6,
-      "max_ms": 10
+      "p95_ms": 7,
+      "max_ms": 12
     },
     "baseline_p95_ms": 5,
-    "measured_at": "2026-10-10T16:50:23+00:00",
+    "measured_at": "2026-10-10T19:34:49+00:00",
     "windows": {
       "baseline": [
-        1791650534,
-        1791650834
+        1791660400,
+        1791660700
       ],
       "fault": [
-        1791650839,
-        1791651019
+        1791660705,
+        1791660885
       ]
     },
+    "fault_ended_at": 1791660824.6,
+    "recovered_s": 150,
+    "recovery_checked_s": 155,
+    "recovery_live": true,
     "control": {
       "expected": "high",
       "pass": true
-    },
-    "fault_ended_at": 1791650958.7,
-    "recovered_s": null,
-    "recovery_checked_s": 70
+    }
   },
   "control-ad-cpu": {
     "tier": "low",
@@ -486,7 +487,7 @@
     },
     "fault_ended_at": 1791652618.8,
     "recovered_s": 150,
-    "recovery_checked_s": 607
+    "recovery_checked_s": 900
   },
   "kafka-outage": {
     "tier": "low",
@@ -606,7 +607,7 @@
     },
     "fault_ended_at": 1791655830.6,
     "recovered_s": 150,
-    "recovery_checked_s": 242
+    "recovery_checked_s": 900
   },
   "quote-garbage": {
     "tier": "high",
