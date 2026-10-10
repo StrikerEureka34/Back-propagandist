@@ -129,7 +129,9 @@ def test_file_approver_reads_the_console_buttons(tmp_path):
         def press():
             while not (tmp_path / "pending.json").exists():
                 pass
-            (tmp_path / "decision.json").write_text(json.dumps({"decision": choice}))
+            # written in one step, like the page's decide(): a plain write can be read half-done (flaky)
+            (tmp_path / "decision.tmp").write_text(json.dumps({"decision": choice}))
+            (tmp_path / "decision.tmp").replace(tmp_path / "decision.json")
         threading.Thread(target=press, daemon=True).start()
 
     approve = agent.file_approver(tmp_path)
