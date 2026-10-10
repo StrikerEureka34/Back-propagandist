@@ -1,0 +1,8 @@
+.env
+.venv/
+__pycache__/
+.pytest_cache/
+.design/
+.claude/settings.local.json
+# `uv run streamlit skills` symlinks into each person's local venv; never commit them
+.agents/

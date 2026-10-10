@@ -1,0 +1,20 @@
+[project]
+name = "hackathon-day"
+version = "0.1.0"
+description = "One challenge day. See INSTRUCTIONS.md."
+requires-python = ">=3.12"
+dependencies = [
+    "anthropic",
+    "python-dotenv",
+    "streamlit>=1.57",  # 1.57+ ships `streamlit skills`
+]
+
+[dependency-groups]
+dev = [
+    "pillow",  # design-from-ref palette.py
+    "pytest",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

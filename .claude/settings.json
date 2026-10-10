@@ -1,0 +1,43 @@
+{
+  "model": "opusplan",
+  "modelSettings": {
+    "claude-opus-5-5": { "effortLevel": "xhigh" },
+    "claude-sonnet-5-5": { "effortLevel": "high" }
+  },
+  "permissions": {
+    "allow": [
+      "Bash(uv run pytest)",
+      "Bash(uv run pytest *)",
+      "Bash(uv run streamlit run *)",
+      "Bash(node scripts/check-tokens.mjs)",
+      "Bash(node scripts/check-tokens.mjs *)",
+      "Bash(git status)",
+      "Bash(git status *)",
+      "Bash(git diff)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(gh issue list *)",
+      "Bash(gh issue view *)"
+    ],
+    "ask": [
+      "Bash(git push)",
+      "Bash(git push *)"
+    ],
+    "deny": [
+      "Read(./.env)"
+    ]
+  },
+  "extraKnownMarketplaces": {
+    "anthropic-agent-skills": {
+      "source": { "source": "github", "repo": "anthropics/skills" }
+    },
+    "superpowers-marketplace": {
+      "source": { "source": "github", "repo": "obra/superpowers-marketplace" }
+    }
+  },
+  "enabledPlugins": {
+    "document-skills@anthropic-agent-skills": true,
+    "claude-api@anthropic-agent-skills": true,
+    "superpowers@superpowers-marketplace": true
+  }
+}
