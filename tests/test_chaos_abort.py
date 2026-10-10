@@ -205,3 +205,26 @@ def test_a_pair_has_both_targets_and_the_stricter_kill_switch(monkeypatch):
     cart_pod = {"labels": {"app.kubernetes.io/component": "valkey-cart"}}
     assert chaos.is_target(pair["target"], cart_pod)  # its replacement is the fault, not collateral
     assert not chaos.is_target(pair["target"], {"labels": {"opentelemetry.io/name": "ad"}})
+
+
+def test_an_aborted_node_network_fault_takes_its_delay_and_helper_pod_with_it(monkeypatch):
+    calls = []
+    show = ("qdisc htb 100: dev eth0 root refcnt 17 r2q 10 default 0x1 direct_packets_stat 28\n"
+            "qdisc netem 101: dev eth0 parent 100:1 limit 1000 delay 200ms\nqdisc noqueue 0: dev lo root refcnt 2\n")
+
+    def sh(*cmd):
+        calls.append(cmd)
+        if cmd[:4] == ("kubectl", "get", "pods", "-n") and cmd[4] == "default":
+            return "pod/node-network-chaos-ovbce\npod/unrelated\n"
+        return show if cmd[-2:] == ("qdisc", "show") else ""
+    monkeypatch.setattr(chaos, "sh", sh)
+    monkeypatch.setattr(chaos, "pods", lambda: {})
+    exp = {"scenario": "node-network-chaos", "target": "node:chaos-worker", "params": {"node-name": "chaos-worker"}}
+    chaos.cleanup_fn(exp, {}, set())(aborted=True)
+    assert ("kubectl", "delete", "pod/node-network-chaos-ovbce", "-n", "default", "--wait=false",
+            "--grace-period=0", "--force") in calls
+    assert ("docker", "exec", "chaos-worker", "tc", "qdisc", "del", "dev", "eth0", "root") in calls
+    assert not any("unrelated" in " ".join(c) for c in calls if "delete" in c)
+    calls.clear()
+    chaos.cleanup_fn(exp, {}, set())(aborted=False)  # krkn finished and cleaned up itself: hands off
+    assert not any("del" in c for c in calls)

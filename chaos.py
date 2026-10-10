@@ -296,6 +296,17 @@ def cleanup_fn(exp: dict, pods_before: dict, containers_before: set, spare: str 
             for name, p in pods().items():
                 if is_target(exp["target"], p):
                     sh("kubectl", "delete", "pod", name, "-n", NS, "--wait=false")
+        # A node network fault killed mid-way leaves its helper pod (in `default`) and its netem delay on the
+        # node: the shop stayed +200 ms slow for 8 min after blast-latency+catalog-db-cutoff tripped (2026-10-11).
+        if aborted and exp["scenario"] == "node-network-chaos":
+            for name in sh("kubectl", "get", "pods", "-n", "default", "-o", "name").split():
+                if name.startswith("pod/node-network-chaos-"):
+                    sh("kubectl", "delete", name, "-n", "default", "--wait=false", "--grace-period=0", "--force")
+            # ponytail: kind nodes are containers, so docker exec reaches their tc; a real cluster needs a
+            # privileged debug pod on the node
+            node = exp["params"]["node-name"]
+            for dev in re.findall(r"qdisc (?:htb|netem|tbf|prio) \S+ dev (\S+) root", sh("docker", "exec", node, "tc", "qdisc", "show")):
+                sh("docker", "exec", node, "tc", "qdisc", "del", "dev", dev, "root")
     return cleanup
 
 
