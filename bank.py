@@ -199,6 +199,13 @@ def load() -> dict:
 
 
 def measure(exp_id: str, baseline: dict) -> dict:
+    """Runs one fault and rates it. Holds the run lock from injection to the end of the rating
+    window, so no other fault lands in it."""
+    with chaos.exclusive(exp_id):
+        return _measure(exp_id, baseline)
+
+
+def _measure(exp_id: str, baseline: dict) -> dict:
     exp = next(e for e in chaos.load_experiments() if e["id"] == exp_id)
     pods_before = chaos.pods()
     summary = chaos.run(exp_id)

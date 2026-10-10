@@ -19,8 +19,14 @@ import sys
 import time
 import tomllib
 import urllib.request
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
+
+try:
+    import fcntl
+except ImportError:  # Windows: replay only, live faults run on the Arch box
+    fcntl = None
 
 ROOT = Path(__file__).parent
 RUNS = ROOT / "runs"
@@ -40,6 +46,39 @@ FLAG_FILE = "/app/data/demo.flagd.json"  # shared with flagd, which reloads it i
 def load_experiments() -> list[dict]:
     with open(ROOT / "experiments.toml", "rb") as f:
         return tomllib.load(f)["experiment"]
+
+
+_held = False
+
+
+@contextmanager
+def exclusive(what: str):
+    """One fault at a time across processes (agent, bank.py, chaos.py): two overlapping faults spoil
+    both ratings (payment-kill under control-ad-cpu, 2026-10-10). The OS drops the lock when the
+    holder dies, so a crash leaves nothing stale. Re-entrant: bank.measure holds it around chaos.run."""
+    global _held
+    if _held or fcntl is None:
+        yield
+        return
+    RUNS.mkdir(exist_ok=True)
+    f = open(RUNS / "LOCK", "a+")
+    try:
+        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        f.seek(0)
+        holder = f.read().strip() or "unknown"
+        f.close()
+        sys.exit(f"another fault is running ({holder}); wait for it to finish")
+    f.truncate(0)
+    f.write(f"{what}, pid {os.getpid()}")
+    f.flush()
+    _held = True
+    try:
+        yield
+    finally:
+        _held = False
+        f.truncate(0)
+        f.close()
 
 
 def krkn_command(exp: dict) -> list[str]:
@@ -334,6 +373,7 @@ if __name__ == "__main__":
         for e in load_experiments():
             print(f"{e['id']:21} {e['scenario']:15} {e['target']}")
     elif len(sys.argv) == 3 and sys.argv[1] == "run":
-        run(sys.argv[2])
+        with exclusive(sys.argv[2]):
+            run(sys.argv[2])
     else:
         sys.exit(__doc__)

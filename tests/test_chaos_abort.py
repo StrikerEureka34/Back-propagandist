@@ -1,6 +1,8 @@
 import subprocess
 import time
 
+import pytest
+
 import chaos
 
 LIMITS = {"error_rate": 0.5, "p95_ms": 1000, "max_s": 100}
@@ -143,3 +145,19 @@ def test_krkn_failed_catches_a_broken_tc_command_that_krkn_still_calls_pass():
     assert not chaos.krkn_failed(harmless, aborted=False, returncode=0)
     assert chaos.krkn_failed("    Exit Status           : FAIL (1)\n", aborted=False, returncode=1)
     assert not chaos.krkn_failed("", aborted=True, returncode=-9)  # killed by our own kill switch
+
+
+@pytest.mark.skipif(chaos.fcntl is None, reason="no flock on Windows; live runs are Linux-only")
+def test_a_second_fault_is_refused_while_one_runs(tmp_path, monkeypatch):
+    monkeypatch.setattr(chaos, "RUNS", tmp_path)
+    other = open(tmp_path / "LOCK", "a+")  # another process mid-fault (flock is per open file)
+    other.write("payment-kill, pid 1")
+    other.flush()
+    chaos.fcntl.flock(other, chaos.fcntl.LOCK_EX | chaos.fcntl.LOCK_NB)
+    with pytest.raises(SystemExit, match="payment-kill"):
+        with chaos.exclusive("control-ad-cpu"):
+            pass
+    other.close()  # the holder finished (or died): the lock is free, and re-entrant inside
+    with chaos.exclusive("control-ad-cpu"):
+        with chaos.exclusive("control-ad-cpu"):
+            assert "control-ad-cpu" in (tmp_path / "LOCK").read_text()
