@@ -1,47 +1,65 @@
-# Day 1: Chaos on Astronomy Shop
-**Goal:** AI-driven chaos engineering: map the app, let AI pick experiments, break it with krkn
-safely (kill switch), observe impact and recovery. Statement: `docs/hackathon-problem-statement.md`.
-**Success criterion:** kill switch stops a sustained fault ≤ 5 s after the threshold breach and the
-shop is back to baseline ≤ 60 s later - baseline: no kill switch (smoke G4 fault ran its full 60 s)
-**Repro:** `uv run python chaos.py run traffic-spike` (on the Arch box; cluster `chaos` running)
-**Rubric:** none supplied. Day-1 checklist: app running · dependency map · monitoring baseline ·
-one failure injected · auto-stop tested · demo with impact visible
-**Start:** 11:10 - feature freeze 15:30, code freeze 16:30, Demo 1 17:00 (Day 2 continues)
+# Day 2: Agentic chaos on the fault bank
+**Goal:** an AI that picks experiments from the fault bank and the map, runs them safely (a person
+approves each run), explains what broke and how to fix it, and scores resilience without
+rewarding "break everything". Statement: `docs/hackathon-problem-statement.md`.
+**Success criterion:** one agent session over a person-picked pool (kill switch active, each run approved):
+1. **≥3 distinct root causes** rated ≥ medium, each found by a mild or targeted fault, ranked by
+   leverage, each with a fix and the run file it cites.
+2. **One fix verified:** the same fault re-run after the fix is ≥1 tier lower, and the pool's
+   resilience score goes up.
+3. **Calibration:** both known-answer controls pass the same day.
 
-## Setup (done, PR #3)
-- App: OpenTelemetry Astronomy Shop, chart 0.42.3, on kind v0.33.0 (`k8s/`), namespace `otel-demo`
-- Shop + `/jaeger/ui` + `/grafana` at `localhost:8080`, Prometheus at `localhost:9090` (Arch box)
-- krkn via `krknctl` v0.14.2-beta. Always pass `--wait-duration 1` and `--prometheus-url http://localhost:9090`
-- Smoke test `/smoke-test`: G1-G4 PASS, evidence in `evidence/smoke-test.md`
+- Baseline: Day 1 had no AI ranking and no verified fix.
 
-## Flow
-map `depmap.py` → AI plan `plan.py` (fixed krkn menu, human approves) → break `chaos.py`
-(krknctl + kill switch) → observe `observe.py` → report (Day 2). krkn does every break.
+**Repro:** `uv run python agent.py --pool <ids> --budget 8` (Arch box). On any laptop: `--replay bank.json`
+**Rubric:** none supplied. Day-2 checklist:
+- AI planner (map-based, with reasons) · ≥3 failure types run · AI findings ranked + fixes + score
+- stretch: re-run after a fix, live UI, combined failures
+- 5 deliverables
 
-## Experiments (`experiments.toml`, the contract between lanes; stdlib `tomllib`, no new dep)
-| id | krkn scenario | shows |
-|---|---|---|
-| cart-wipe | pod-scenarios, valkey-cart | every cart lost (no volume) |
-| traffic-spike | http-load → frontend-proxy | overload; kill-switch demo |
-| cpu-starve | node-cpu-hog, worker | slow, nothing down |
-| kafka-outage (stretch) | pod-scenarios, kafka | charged orders never fraud-checked |
+**Start:** S, then feature freeze S+5:30, code freeze S+7:00, submit S+9:00 (aim 30 min early)
 
-## Pieces (in scope, total 3.5h over 2 lanes)
+## Two scores, never mixed (krkn-ai's lesson: damage fitness drives toward "destructive" scenarios)
+- **Leverage ranks findings:** impact (high 3 / medium 2 / low 1) ÷ fault strength (mild 1 /
+  targeted 2 / broad 3). From `bank.json`: blast-loss 3.0 > catalog-kill 1.5 > cpu-starve 0.67
+- **The resilience score rates the system:** krkn's formula (critical 3 pts, warning 1 pt;
+  passed / total × 100). It's computed over the pool fixed at session start and compared before/after a fix.
+- **Guards:**
+  - one target per run
+  - no namespace-wide or steady-node faults
+  - the kill switch is active (traffic-spike: blast radius + STOP only, intended)
+  - the controls must pass
+  - a person approves each run
+
+## Agent (one fresh sub-agent per task, one after another)
+1. orchestrator (Groq `gpt-oss-120b`) ranks the pool + candidate pairs
+2. a person approves each run → `bank.measure()`
+3. analyst per run (OpenRouter `nemotron`)
+4. `judge.py` groups findings by root cause
+5. fixer per group (`docs/fix-catalog.md`)
+6. orchestrator re-ranks → `report.md`
+
+- **Code** builds the pairs, checks interactions and computes every number.
+- **The LLM** ranks, writes hypotheses and explains. Its suggestions only name known faults.
+
+## Pieces (in scope, total 3h15 over 2 lanes)
 | Issue | Piece | Files | Est | Parallel |
 |---|---|---|---|---|
-| #4 | Dependency map + risk flags | `depmap.py`, `tests/test_depmap.py`, `tests/fixtures/` | 45m | B (StrikerEureka34) |
-| #5 | krkn runner + kill switch | `chaos.py`, `experiments.toml`, `tests/test_chaos_abort.py` | 1.5h | A (TanmayBnz, Arch box) |
-| #6 | Baseline + Prometheus metrics | `observe.py`, `tests/test_observe.py` | 45m | B, after #4 |
-| #7 | AI planner (OpenRouter `llm()`) | `plan.py`, `llm.py`, `.env.example`, `tests/test_plan.py` | 30m | B, after #4; drop first if behind at 14:45 |
-Polish #12 (15:30-16:30) · Pitch #13 (16:30-17:00)
+| #17 | P7 `llm()` providers (done) | `llm.py`, `.env.example`, `tests/test_llm.py` | - | B (StrikerEureka34) |
+| #18 | P9 rules: strength, leverage, score, pairs | `judge.py`, `tests/test_judge.py`, `docs/` | 45m | B, parallel with #7 |
+| #7 | P8 agent loop + replay runner | `agent.py`, `tests/test_agent.py`, `pyproject.toml` | 1h15 | B, after #17 |
+| #20 | P13 combo runner (`chaos.py run a+b`) | `chaos.py`, `bank.py`, `tests/test_chaos_abort.py` | 45m | A (TanmayBnz) |
+| #19 | P12 fix + re-run: catalog-kill, replicas 2 | `k8s/otel-values.yaml`, `evidence/` | 30m | A, after #20 |
+| #14 | Fault bank (ongoing: krkn-ai candidates, harvest) | `bank.py`, `experiments.toml` | - | A |
+
+Polish #12 (S+5:30–7:00) · Pitch #13 (S+7:00–9:00). Behind at S+3:00? Cut #19, then #20.
 
 ## Out of scope
-- #8 krkn-ai has no in-process abort - our watchdog covers it; upstream PR later
-- #9 krknctl Ctrl+C skips krkn rollback - we clean up ourselves
-- #10 Postgres cut-off only partly degrades the catalog - weak demo signal; report finding
-- #11 Full-disk scenario unsafe on kind - would fill the laptop disk
+- #16 (one list): parallel injection, exhaustive combinations / genetic ranking, faults that are
+  unsafe on kind, two laptops in one cluster, LangChain. None of them moves the criterion.
 
-## Day 2 (re-triage)
-≥3 failure types incl. slow network (needs 2 workers) and partial dependency failure
-(service-hijacking) · krkn-ai genetic search · findings report + resilience score · re-run after fix
-· combined failures · 5 deliverables
+## Setup (done)
+- **kind `chaos`:** control plane + `chaos-worker` ("blast": backends) + `chaos-worker2` ("steady":
+  monitoring, frontend). Shop, `/jaeger/ui` and `/grafana` at `localhost:8080`; Prometheus at `:9090`.
+- **krknctl v0.14.2-beta:** always pass `--wait-duration 1 --prometheus-url http://localhost:9090`.
+- **Fault bank:** 13 entries rated in `bank.json` on 2 workers; both controls pass.
