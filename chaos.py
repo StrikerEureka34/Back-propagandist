@@ -45,6 +45,8 @@ def load_experiments() -> list[dict]:
 def krkn_command(exp: dict) -> list[str]:
     cmd = ["krknctl", "run", exp["scenario"], "--wait-duration", "1", "--prometheus-url", PROM]
     for flag, value in exp["params"].items():
+        if flag.endswith("-file-path"):  # krknctl reads the file itself; give it an absolute path
+            value = ROOT / value
         cmd += [f"--{flag}", str(value)]
     return cmd
 
@@ -195,6 +197,10 @@ def cleanup_fn(exp: dict, pods_before: dict, containers_before: set):
             if name not in pods_before and not is_target(exp["target"], p):
                 # force: a graceful delete leaves the load pods firing for their 30 s shutdown
                 sh("kubectl", "delete", "pod", name, "-n", NS, "--wait=false", "--grace-period=0", "--force")
+        if "service" in exp:  # hijacked Service: krkn restores the selector only if it finishes
+            key, _, value = exp["target"].partition("=")
+            patch = json.dumps([{"op": "replace", "path": "/spec/selector", "value": {key: value}}])
+            sh("kubectl", "patch", "svc", exp["service"], "-n", NS, "--type=json", "-p", patch)
         if "network" in exp["scenario"]:  # a network fault lives in the target: replace it
             for name, p in pods().items():
                 if is_target(exp["target"], p):

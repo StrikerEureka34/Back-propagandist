@@ -81,3 +81,17 @@ def test_every_flag_fault_names_a_flag_variant_and_duration():
         if e["scenario"] == "flagd":
             assert {"flag", "variant", "duration"} <= set(e["params"])
             assert e["abort_if"]["max_s"] > e["params"]["duration"]
+
+
+def test_the_targeted_pod_being_replaced_is_the_fault_not_collateral_damage():
+    before = {"catalog-1": {"labels": {"app": "catalog"}, "restarts": 0},
+              "frontend-1": {"labels": {"app": "frontend"}, "restarts": 0}}
+    after = {"frontend-1": {"labels": {"app": "frontend"}, "restarts": 1}}
+    found = bank.effects(win(), win(), before, after, QUIET, target="app=catalog")
+    assert [e["what"] for e in found] == ["pod frontend-1 restarted 1x"]
+
+
+def test_file_path_params_are_absolute_for_krknctl():
+    exp = {"scenario": "service-hijacking", "params": {"scenario-file-path": "scenarios/x.yaml"}}
+    cmd = chaos.krkn_command(exp)
+    assert cmd[cmd.index("--scenario-file-path") + 1] == str(chaos.ROOT / "scenarios/x.yaml")

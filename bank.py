@@ -62,8 +62,10 @@ def window(start: float, end: float) -> dict:
     }
 
 
-def effects(before: dict, during: dict, pods_before: dict, pods_after: dict, summary: dict) -> list[dict]:
-    """Every change big enough to count, each tagged with what kind of damage it is."""
+def effects(before: dict, during: dict, pods_before: dict, pods_after: dict, summary: dict,
+            target: str = "") -> list[dict]:
+    """Every change big enough to count, each tagged with what kind of damage it is. The target
+    pod being killed or replaced is the fault itself, not damage, so only collateral pods count."""
     out = []
     if summary["aborted"]:
         out.append({"kind": "kill-switch", "what": summary["abort_reason"]})
@@ -93,6 +95,8 @@ def effects(before: dict, during: dict, pods_before: dict, pods_after: dict, sum
         if now >= MEM[0] * was and now - was >= MEM[1]:
             out.append({"kind": "memory", "service": c, "what": f"{c} memory {was / 2**20:.0f} -> {now / 2**20:.0f} MiB"})
     for name, p in sorted(pods_before.items()):
+        if target and chaos.is_target(target, p):
+            continue
         after = pods_after.get(name)
         if after is None:
             out.append({"kind": "pod-replaced", "what": f"pod {name} replaced"})
@@ -116,15 +120,18 @@ def load() -> dict:
 
 
 def measure(exp_id: str, baseline: dict) -> dict:
+    exp = next(e for e in chaos.load_experiments() if e["id"] == exp_id)
     pods_before = chaos.pods()
     summary = chaos.run(exp_id)
     if summary["abort_reason"] in ("STOP file", "Ctrl+C"):
         sys.exit(f"{exp_id} stopped by hand: not rated")
+    if summary["krkn_failed"]:  # nothing was injected: rating it would bank a false "low"
+        print(f"{exp_id}: krkn failed, not rated. See runs/{exp_id}/krknctl.log")
+        return {}
     # the last minute of the fault reaches Prometheus up to SCRAPE_S late
     time.sleep(max(0.0, summary["ended_at"] + SCRAPE_S + 5 - time.time()))
     during = window(summary["started_at"], summary["ended_at"] + SCRAPE_S)
-    effs = effects(baseline, during, pods_before, chaos.pods(), summary)
-    exp = next(e for e in chaos.load_experiments() if e["id"] == exp_id)
+    effs = effects(baseline, during, pods_before, chaos.pods(), summary, exp["target"])
     entry = {
         "tier": tier(effs), "effects": effs,
         "fault": exp.get("note") or exp["scenario"], "scenario": exp["scenario"], "params": exp["params"],

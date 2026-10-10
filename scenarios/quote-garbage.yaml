@@ -1,0 +1,16 @@
+# krkn service-hijacking: the quote Service is pointed at krkn's mock web server, which answers
+# shipping's POST /getquote with 200 OK and a body that isn't a quote. A dependency that is up
+# and fast but wrong, the failure health checks never see.
+service_target_port: 8080
+service_name: quote
+service_namespace: otel-demo
+image: quay.io/krkn-chaos/krkn-service-hijacking:v0.1.3
+chaos_duration: 120
+privileged: True
+plan:
+  - resource: "/getquote"
+    steps:
+      POST:
+        - status: 200
+          mime_type: "application/json"
+          payload: '{"oops": "not a number"}'

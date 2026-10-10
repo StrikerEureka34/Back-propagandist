@@ -68,6 +68,141 @@ error_rate = 0.5
 p95_ms = 2000
 max_s = 240
 
+# Bank faults (#14), all injected from outside the app by krkn. Node faults target chaos-worker,
+# the "blast" node with the backends; monitoring lives on chaos-worker2 (k8s/kind.yaml).
+# max_s = fault time + ~4 min of krknctl start/finish overhead.
+
+[[experiment]]
+id = "catalog-kill"
+scenario = "pod-scenarios"
+target = "opentelemetry.io/name=product-catalog"
+probe_url = "http://localhost:8080/api/products"
+note = "product catalog pod killed"
+[experiment.params]
+namespace = "^otel-demo$"
+pod-label = "opentelemetry.io/name=product-catalog"
+disruption-count = 1
+expected-recovery-time = 120
+[experiment.abort_if]
+error_rate = 0.5
+p95_ms = 2000
+max_s = 240
+
+[[experiment]]
+id = "payment-kill"
+scenario = "pod-scenarios"
+target = "opentelemetry.io/name=payment"
+probe_url = "http://localhost:8080/api/products"
+note = "payment pod killed"
+[experiment.params]
+namespace = "^otel-demo$"
+pod-label = "opentelemetry.io/name=payment"
+disruption-count = 1
+expected-recovery-time = 120
+[experiment.abort_if]
+error_rate = 0.5
+p95_ms = 2000
+max_s = 240
+
+[[experiment]]
+id = "recommendation-cutoff"
+scenario = "pod-network-filter"
+target = "opentelemetry.io/name=recommendation"
+probe_url = "http://localhost:8080/api/products"
+note = "nothing can reach recommendation (ingress :8080 dropped)"
+[experiment.params]
+chaos-duration = 120
+namespace = "otel-demo"
+pod-selector = "opentelemetry.io/name=recommendation"
+ingress = "true"
+egress = "false"
+ports = 8080
+[experiment.abort_if]
+error_rate = 0.5
+p95_ms = 2000
+max_s = 360
+
+[[experiment]]
+id = "catalog-db-cutoff"
+scenario = "pod-network-filter"
+target = "opentelemetry.io/name=product-catalog"
+probe_url = "http://localhost:8080/api/products"
+note = "product catalog loses its Postgres database (egress :5432 dropped)"
+[experiment.params]
+chaos-duration = 120
+namespace = "otel-demo"
+pod-selector = "opentelemetry.io/name=product-catalog"
+ingress = "false"
+egress = "true"
+ports = 5432
+[experiment.abort_if]
+error_rate = 0.5
+p95_ms = 2000
+max_s = 360
+
+[[experiment]]
+id = "quote-garbage"
+scenario = "service-hijacking"
+target = "opentelemetry.io/name=quote"
+service = "quote" # chaos.py restores this Service's selector if the run is cut short
+probe_url = "http://localhost:8080/api/products"
+note = "quote answers 200 OK with a body that isn't a quote"
+[experiment.params]
+scenario-file-path = "scenarios/quote-garbage.yaml"
+[experiment.abort_if]
+error_rate = 0.5
+p95_ms = 2000
+max_s = 360
+
+[[experiment]]
+id = "blast-latency"
+scenario = "node-network-chaos"
+target = "node:chaos-worker"
+probe_url = "http://localhost:8080/api/products"
+note = "+200 ms on everything leaving the backend node"
+[experiment.params]
+node-name = "chaos-worker"
+latency = "200ms"
+test-duration = 120
+[experiment.abort_if]
+error_rate = 0.5
+p95_ms = 2000
+max_s = 360
+
+[[experiment]]
+id = "blast-loss"
+scenario = "node-network-chaos"
+target = "node:chaos-worker"
+probe_url = "http://localhost:8080/api/products"
+note = "10 % packet loss on everything leaving the backend node"
+[experiment.params]
+node-name = "chaos-worker"
+loss = "10%"
+test-duration = 120
+[experiment.abort_if]
+error_rate = 0.5
+p95_ms = 2000
+max_s = 360
+
+[[experiment]]
+id = "blast-memory"
+scenario = "node-memory-hog"
+target = "node:chaos-worker"
+probe_url = "http://localhost:8080/api/products"
+note = "1 GiB memory pressure on the backend node"
+[experiment.params]
+chaos-duration = 120
+# ponytail: fixed 1g, not krkn's default 90 %: a kind node's memory is the laptop's memory.
+# Raise it only with free RAM to spare (free -m).
+memory-consumption = "1g"
+memory-workers = 1
+namespace = "otel-demo"
+node-selector = "kubernetes.io/hostname=chaos-worker"
+[experiment.abort_if]
+error_rate = 0.5
+p95_ms = 2000
+max_s = 360
+
 # Known-answer controls: two of the demo's planted flagd bugs, used only to check that bank.py
 # measures correctly (if payment-failure-100 doesn't rate high, the measurement is broken).
 # Not part of the bank itself: their outcome is written into the demo. scenario = "flagd";
