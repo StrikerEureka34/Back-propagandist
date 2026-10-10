@@ -1,0 +1,13 @@
+# Chaos sandbox. App pods land on the worker; the control plane maps NodePorts to the host:
+# 8080 = frontend-proxy (shop, /jaeger/ui, /grafana, /loadgen, /feature), 9090 = Prometheus.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: chaos
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - containerPort: 30080
+        hostPort: 8080
+      - containerPort: 30090
+        hostPort: 9090
+  - role: worker

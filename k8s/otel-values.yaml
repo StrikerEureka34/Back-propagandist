@@ -1,0 +1,27 @@
+# Overrides for open-telemetry/opentelemetry-demo. Everything else stays at chart defaults,
+# which is what the chart's own CI installs on kind.
+components:
+  frontend-proxy:
+    service:
+      type: NodePort
+      nodePort: 30080 # host :8080 via k8s/kind.yaml
+  # Low on memory (G1 < 3 GB free)? Uncomment these three and the two blocks at the end,
+  # then `helm uninstall otel -n otel-demo` and install again (the chart can't upgrade in place).
+  # agent: {enabled: false}
+  # chatbot: {enabled: false}
+  # mcp: {enabled: false}
+
+prometheus:
+  server:
+    service:
+      type: NodePort
+      nodePort: 30090 # host :9090 via k8s/kind.yaml
+
+# opensearch:
+#   enabled: false
+# opentelemetry-collector:
+#   config:
+#     service:
+#       pipelines:
+#         logs:
+#           exporters: [debug]
