@@ -339,7 +339,7 @@ def build(deps: Deps, out: Path):
         item = {**(queued or {"predicted": None, "confidence": None}), "ids": ids,
                 "hypothesis": follow.get("why") or (queued or {}).get("hypothesis"),
                 "reason": f"follow-up to {after}" + ("" if set(ids) <= set(state["pool"]) else
-                                                      ", outside the pool you picked: you decide"),
+                                                      ", not in the pool you picked"),
                 "source": f"analyst after {after}"}
         return [item, *(q for q in rest if q is not queued)], None
 

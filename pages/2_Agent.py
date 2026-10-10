@@ -168,14 +168,21 @@ def predicted(item: dict) -> str:
     return (item.get("predicted") or "-") + (f" ({c:.0%})" if isinstance(c, (int, float)) else "")
 
 
+def source(item: dict) -> str:
+    """Who put a run in the queue: the planner, the rules (planner left it out), or an analyst's lead."""
+    if item.get("source"):
+        return item["source"] + (" (not in pool)" if "not in the pool" in (item.get("reason") or "") else "")
+    return "rules" if item.get("ranked_by") == "rules" else "planner"
+
+
 def runs_table(results: list[dict], queue: list[dict], left: int = 0) -> pd.DataFrame:
     """Finished runs, then the queue: the first `left` items run this session, the rest don't."""
-    rows = [{"Fault": r["id"], "Measured": r["tier"] if "tier" in r else r["entry"]["tier"],
+    rows = [{"Fault": r["id"], "Source": source(r["item"]), "Measured": r["tier"] if "tier" in r else r["entry"]["tier"],
              "Predicted": predicted(r["item"]),
-             "Held? (analyst)": {True: "yes", False: "no"}.get(r["analysis"].get("hypothesis_held"), "-"),
-             "Hypothesis (planner)": r["item"].get("hypothesis")} for r in results]
-    rows += [{"Fault": "+".join(q["ids"]), "Measured": "up next" if n < left else "next session",
-              "Predicted": predicted(q), "Held? (analyst)": "", "Hypothesis (planner)": q.get("hypothesis")}
+             "Hypothesis held?": {True: "yes", False: "no"}.get(r["analysis"].get("hypothesis_held"), "-"),
+             "Hypothesis": r["item"].get("hypothesis")} for r in results]
+    rows += [{"Fault": "+".join(q["ids"]), "Source": source(q), "Measured": "up next" if n < left else "next session",
+              "Predicted": predicted(q), "Hypothesis held?": "", "Hypothesis": q.get("hypothesis")}
              for n, q in enumerate(queue)]
     return pd.DataFrame(rows)
 
@@ -245,9 +252,15 @@ def watch(out: Path):
         with st.container(border=True):
             n = len(results) + 1
             st.subheader(f"Run {n}: {'+'.join(pending['ids'])}")
+            src = pending.get("source") or ""
+            if src.startswith("analyst"):
+                st.badge("Analyst follow-up", color="gray")
+                st.write(f"Suggested by the analyst after **{src.removeprefix('analyst after ')}**."
+                         + (" It is not in the pool you picked, so it only runs if you approve it."
+                            if "not in the pool" in (pending.get("reason") or "") else ""))
             st.write(pending.get("hypothesis") or "-")
-            st.caption(f"Predicted {pending.get('predicted') or '-'}{conf(pending.get('confidence'))} · "
-                       f"why: {pending.get('reason') or '-'}")
+            st.caption((f"Predicted {pending['predicted']}{conf(pending.get('confidence'))} · "
+                        if pending.get("predicted") else "") + f"why: {pending.get('reason') or '-'}")
             st.caption("Kill switch: blast radius, STOP and Ctrl+C always; error and latency limits from "
                        "experiments.toml (traffic-spike: blast radius and STOP only).")
             b1, b2, b3 = st.columns(3)

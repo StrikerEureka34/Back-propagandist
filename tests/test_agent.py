@@ -289,7 +289,7 @@ def test_the_analysts_lead_runs_next_this_session_within_the_rules(tmp_path):
     assert ran == ["blast-loss", "blast-latency", "cart-wipe"]  # blast-loss's lead (blast-latency) ran second
     lead = state["results"][1]["item"]
     assert lead["source"] == "analyst after blast-loss" and lead["hypothesis"].startswith("same path")
-    assert "outside the pool you picked" in lead["reason"]  # blast-latency wasn't in POOL: the card says so
+    assert "not in the pool you picked" in lead["reason"]  # blast-latency wasn't in POOL: the card says so
     assert state["results"][0]["analysis"]["follow_up_status"] == "runs next, this session"
     # blast-latency already ran, so later leads to it wait for next session instead of repeating
     assert "already ran" in state["results"][1]["analysis"]["follow_up_status"]
