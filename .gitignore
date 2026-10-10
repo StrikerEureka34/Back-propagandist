@@ -2,6 +2,7 @@
 .venv/
 __pycache__/
 .playwright-mcp/
+runs/
 .pytest_cache/
 .design/
 .claude/settings.local.json
