@@ -91,7 +91,7 @@ def _theme() -> dict:
             "roles": {role: colors[i] for role, i in ROLE_COLOR.items()}}
 
 
-def show(progress: dict | None = None, pending: dict | None = None, model: dict | None = None, height: int = 760):
+def show(progress: dict | None = None, pending: dict | None = None, model: dict | None = None, height: int = 700):
     """The diagram and its details panel. `model` names the model per step, e.g. {"planner": "gpt-oss-120b"};
     in a live session the running step ripples and the panel opens on it."""
     active = active_step(progress, bool(pending))

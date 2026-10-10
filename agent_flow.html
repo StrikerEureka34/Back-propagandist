@@ -9,27 +9,20 @@
   :root { --ease: cubic-bezier(.2, .7, .2, 1); }
   * { box-sizing: border-box; }
   html, body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font), sans-serif; }
-  .legend { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 12px; }
-  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--line);
-          border-radius: 999px; font-size: 12px; background: var(--surface); cursor: default;
-          transition: border-color .2s var(--ease), transform .2s var(--ease); }
-  .chip:hover { border-color: var(--ink); transform: translateY(-1px); }
-  .chip i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
-  .hint { margin-left: auto; font-size: 12px; opacity: .65; align-self: center; }
   #frame { position: relative; width: 100%; overflow: hidden; }
   #canvas { position: absolute; left: 0; top: 0; width: 1040px; height: 500px; transform-origin: 0 0; }
   svg { position: absolute; inset: 0; overflow: visible; }
-  .edge { fill: none; stroke: var(--ink); stroke-opacity: .35; stroke-width: 1.4; stroke-linejoin: round;
+  .edge { fill: none; stroke: var(--ink); stroke-opacity: .5; stroke-width: 1.6; stroke-linejoin: round;
           transition: stroke-opacity .25s var(--ease), stroke .25s var(--ease), stroke-width .25s var(--ease); }
   .edge.draw { stroke-dasharray: var(--len); stroke-dashoffset: var(--len); animation: draw .7s var(--ease) forwards; }
   .edge.hot { stroke: var(--signal); stroke-opacity: 1; stroke-width: 2; }
   .edge.dim { stroke-opacity: .12; }
   .arrow { fill: var(--ink); fill-opacity: .45; }
-  .elabel { font-size: 11px; fill: var(--ink); opacity: 0; animation: fade .4s var(--ease) forwards; }
+  .elabel { font-size: 13px; font-weight: 600; fill: var(--ink); opacity: 0; animation: fade .4s var(--ease) forwards; }
   .elabel-bg { fill: var(--bg); opacity: 0; animation: fade .4s var(--ease) forwards; }
   .packet { fill: var(--signal); }
   .trail { fill: var(--signal); opacity: .25; }
-  .node { position: absolute; width: 200px; height: 78px; padding: 10px 12px 10px 16px; background: var(--surface);
+  .node { position: absolute; width: 210px; height: 88px; padding: 11px 12px 11px 17px; background: var(--surface);
           border: 1px solid var(--line); border-radius: var(--radius); cursor: pointer; user-select: none;
           opacity: 0; transform: translateY(8px);
           animation: rise .5s var(--ease) forwards; animation-delay: var(--d);
@@ -42,18 +35,18 @@
   .node.active { border-color: var(--signal); }
   .node.active::after { content: ""; position: absolute; inset: -1px; border-radius: var(--radius);
                         border: 2px solid var(--signal); animation: ripple 1.8s var(--ease) infinite; }
-  .node b { display: block; font-size: 13px; font-weight: 600; line-height: 1.25; }
-  .node small { display: block; margin-top: 4px; font-size: 11.5px; line-height: 1.3; opacity: .72; }
-  .node .now { position: absolute; right: 8px; top: 8px; font-size: 10px; letter-spacing: .04em; text-transform: uppercase;
+  .node b { display: block; font-size: 15px; font-weight: 600; line-height: 1.25; }
+  .node small { display: block; margin-top: 5px; font-size: 13px; line-height: 1.35; opacity: .88; }
+  .node .now { position: absolute; right: 8px; top: 8px; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
                color: var(--signal); }
   #panel { margin-top: 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface);
            padding: 14px 16px; min-height: 96px; transition: opacity .25s var(--ease), transform .25s var(--ease); }
   #panel.swap { opacity: 0; transform: translateY(4px); }
-  #panel h4 { margin: 0 0 4px; font-family: var(--heading), serif; font-weight: 500; font-size: 19px; }
-  #panel .role { font-size: 12px; opacity: .7; margin-bottom: 8px; }
-  #panel p { margin: 6px 0; font-size: 14px; line-height: 1.45; }
-  #panel .guard { opacity: .75; font-size: 13px; }
-  #panel ul { margin: 8px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.45; }
+  #panel h4 { margin: 0 0 4px; font-family: var(--heading), serif; font-weight: 500; font-size: 21px; }
+  #panel .role { font-size: 13px; opacity: .85; margin-bottom: 8px; }
+  #panel p { margin: 6px 0; font-size: 15px; line-height: 1.5; }
+  #panel .guard { opacity: .9; font-size: 14px; }
+  #panel ul { margin: 8px 0 0; padding-left: 18px; font-size: 14px; line-height: 1.5; }
   @keyframes rise { to { opacity: 1; transform: none; } }
   @keyframes draw { to { stroke-dashoffset: 0; } }
   @keyframes fade { to { opacity: 1; } }
@@ -66,7 +59,6 @@
 </style>
 </head>
 <body>
-<div class="legend" id="legend"><span class="hint">Hover or click a step</span></div>
 <div id="frame"><div id="canvas"><svg id="svg"></svg></div></div>
 <div id="panel"></div>
 <script>
@@ -78,7 +70,7 @@ R.setProperty("--line", THEME.line); R.setProperty("--signal", THEME.signal); R.
 R.setProperty("--font", THEME.font); R.setProperty("--heading", THEME.heading);
 document.getElementById("fonts").textContent = THEME.imports.map(u => `@import url('${u}');`).join("");
 
-const W = 200, H = 78, X = [20, 290, 560, 830], Y = [30, 210, 390];
+const W = 210, H = 88, X = [10, 280, 550, 820], Y = [24, 210, 396];
 const ROLE_NAME = {person: "a person", code: "code", model: "a model", cluster: "the cluster"};
 const box = id => { const [c, r] = DATA.steps[id].at; return {x: X[c], y: Y[r]}; };
 const pt = (id, side) => { const b = box(id); return {
@@ -110,8 +102,8 @@ const edges = DATA.edges.map((e, i) => {
   if (e.label) {
     const t = el("text", {x: r.lx, y: r.ly + 4, "text-anchor": "middle", class: "elabel"});
     t.textContent = e.label; t.style.animationDelay = `${700 + i * 90}ms`;
-    const w = e.label.length * 5.6 + 12;
-    const bg = el("rect", {x: r.lx - w / 2, y: r.ly - 9, width: w, height: 18, rx: 9, class: "elabel-bg"});
+    const w = e.label.length * 7.2 + 16;
+    const bg = el("rect", {x: r.lx - w / 2, y: r.ly - 11, width: w, height: 22, rx: 11, class: "elabel-bg"});
     svg.insertBefore(bg, t); bg.style.animationDelay = t.style.animationDelay;
   }
   return {e, p};
@@ -143,25 +135,17 @@ Object.entries(DATA.steps).forEach(([id, s], i) => {
   canvas.appendChild(n); nodes[id] = n;
 });
 
-function focus(id, role) {
+function focus(id) {
   edges.forEach(({e, p}) => {
     const on = id && (e.from === id || e.to === id);
-    p.classList.toggle("hot", !!on); p.classList.toggle("dim", !!(id || role) && !on);
+    p.classList.toggle("hot", !!on); p.classList.toggle("dim", !!id && !on);
   });
   Object.entries(nodes).forEach(([nid, n]) => {
     const near = id ? nid === id || DATA.edges.some(e => (e.from === id && e.to === nid) || (e.to === id && e.from === nid))
-                    : role ? DATA.steps[nid].role === role : true;
+                    : true;
     n.classList.toggle("dim", !near);
   });
 }
-
-Object.entries(ROLE_NAME).forEach(([role, name]) => {
-  const c = document.createElement("span");
-  c.className = "chip"; c.style.setProperty("--c", THEME.roles[role]);
-  c.innerHTML = "<i></i>"; c.append(name[0].toUpperCase() + name.slice(1));
-  c.onmouseenter = () => focus(null, role); c.onmouseleave = () => focus(null);
-  document.getElementById("legend").insertBefore(c, document.querySelector(".hint"));
-});
 
 const panel = document.getElementById("panel");
 function select(id) {
