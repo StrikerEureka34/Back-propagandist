@@ -27,9 +27,6 @@ STAGES = {"starting": "Starting the agent", "plan": "Planned", "run_next": "Runn
 
 st.set_page_config(page_title="Agent session", layout="wide")
 st.title("Agent session")
-st.caption("The planner (Groq gpt-oss-120b) orders the faults you pick by expected leverage. You approve "
-           "every run. An analyst (OpenRouter nemotron) explains each result, and a fixer proposes one fix "
-           "per root cause. Every number on this page comes from rules (judge.py), never from a model.")
 
 
 def read(path: Path):
@@ -39,8 +36,9 @@ def read(path: Path):
         return None
 
 
-def pct(value) -> str:
-    return f"{value:.0%}" if isinstance(value, (int, float)) else "-"
+def conf(value, prefix: str = " · confidence ") -> str:
+    """The model's own confidence, or nothing when no model answered."""
+    return f"{prefix}{value:.0%}" if isinstance(value, (int, float)) else ""
 
 
 @st.cache_data(ttl=10, show_spinner=False)
@@ -81,6 +79,9 @@ def pick():
     rated = bank.load()
     ranked = {r["id"]: r for r in judge.rank(rated)}
     exps = [e for e in chaos.load_experiments() if "expect" not in e and e["scenario"] != "flagd"]
+    st.caption("The planner (Groq gpt-oss-120b) orders the faults you pick by expected leverage. You approve "
+               "every run. An analyst (OpenRouter nemotron) explains each result, and a fixer proposes one fix "
+               "per root cause. Every number on this page comes from rules (judge.py), never from a model.")
     st.header("1. Pick the faults")
     left, right = st.columns([7, 5])
     with right:
@@ -91,7 +92,7 @@ def pick():
             replay = mode.startswith("Replay")
             live_ok = cluster_up()
             if not replay and not live_ok:
-                st.warning(f"The shop at {chaos.SHOP} isn't answering. Live runs need the cluster (the Arch box).")
+                st.error(f"The shop at {chaos.SHOP} isn't answering. Live runs need the cluster (the Arch box).")
             budget = st.number_input("Run budget", min_value=1, max_value=len(exps), value=min(8, len(exps)),
                                      help="The most faults this session runs, one at a time (live: about 4 to 5 "
                                           "minutes each). What doesn't fit becomes a suggestion for next time.")
@@ -107,7 +108,8 @@ def pick():
                  "Leverage": ranked[e["id"]]["leverage"] if e["id"] in ranked else None,
                  "Root cause": ranked[e["id"]]["cause"] if e["id"] in ranked else ""} for e in exps]
         table = st.data_editor(
-            pd.DataFrame(rows), hide_index=True, width="stretch", key="pool_editor",
+            pd.DataFrame(rows), hide_index=True, width="stretch", height="content", key="pool_editor",
+            column_order=("Run", "Fault", "Measured", "Leverage", "What it does"), placeholder="-",
             disabled=["Fault", "What it does", "Strength", "Measured", "Leverage", "Root cause"],
             column_config={"Run": st.column_config.CheckboxColumn("Run", width="small"),
                            "Leverage": st.column_config.NumberColumn(format="%.2f",
@@ -135,20 +137,24 @@ def pick():
 
 # ---------------------------------------------------------------- 2 run (live view)
 
+def predicted(item: dict) -> str:
+    """'medium (80%)': the planner's tier and its own confidence, in one cell."""
+    c = item.get("confidence")
+    return (item.get("predicted") or "-") + (f" ({c:.0%})" if isinstance(c, (int, float)) else "")
+
+
 def runs_table(results: list[dict], queue: list[dict]) -> pd.DataFrame:
-    rows = [{"Fault": r["id"], "Hypothesis (planner)": r["item"].get("hypothesis"),
-             "Predicted": r["item"].get("predicted") or "-", "Confidence": pct(r["item"].get("confidence")),
-             "Measured": r["tier"] if "tier" in r else r["entry"]["tier"],
-             "Held? (analyst)": {True: "yes", False: "no"}.get(r["analysis"].get("hypothesis_held"), "-")}
-            for r in results]
-    rows += [{"Fault": "+".join(q["ids"]), "Hypothesis (planner)": q.get("hypothesis"),
-              "Predicted": q.get("predicted") or "-", "Confidence": pct(q.get("confidence")),
-              "Measured": "queued", "Held? (analyst)": ""} for q in queue]
+    rows = [{"Fault": r["id"], "Measured": r["tier"] if "tier" in r else r["entry"]["tier"],
+             "Predicted": predicted(r["item"]),
+             "Held? (analyst)": {True: "yes", False: "no"}.get(r["analysis"].get("hypothesis_held"), "-"),
+             "Hypothesis (planner)": r["item"].get("hypothesis")} for r in results]
+    rows += [{"Fault": "+".join(q["ids"]), "Measured": "queued", "Predicted": predicted(q),
+              "Held? (analyst)": "", "Hypothesis (planner)": q.get("hypothesis")} for q in queue]
     return pd.DataFrame(rows)
 
 
-def analyst_notes(results: list[dict]):
-    for r in reversed(results):
+def analyst_notes(results: list[dict], newest_first: bool = False):
+    for r in (reversed(results) if newest_first else results):
         a = r["analysis"]
         tier = r["tier"] if "tier" in r else r["entry"]["tier"]
         with st.expander(f"{r['id']}: measured {tier}"):
@@ -156,8 +162,8 @@ def analyst_notes(results: list[dict]):
             st.write(f"Why: {a.get('why') or '-'}")
             if a.get("flag"):
                 st.warning(a["flag"])
-            st.caption(f"Analyst confidence {pct(a.get('confidence'))}. Evidence: "
-                       f"{', '.join(a.get('evidence', [])) or 'none cited'}.")
+            st.caption(f"Evidence: {', '.join(a.get('evidence', [])) or 'none cited'}"
+                       + conf(a.get("confidence"), ". Analyst confidence ") + ".")
 
 
 @st.fragment(run_every=2)
@@ -184,7 +190,7 @@ def watch(out: Path):
             n = len(results) + 1
             st.subheader(f"Run {n}: {'+'.join(pending['ids'])}")
             st.write(pending.get("hypothesis") or "-")
-            st.caption(f"Predicted {pending.get('predicted') or '-'} · confidence {pct(pending.get('confidence'))} · "
+            st.caption(f"Predicted {pending.get('predicted') or '-'}{conf(pending.get('confidence'))} · "
                        f"why: {pending.get('reason') or '-'}")
             st.caption("Kill switch: blast radius, STOP and Ctrl+C always; error and latency limits from "
                        "experiments.toml (traffic-spike: blast radius and STOP only).")
@@ -201,8 +207,8 @@ def watch(out: Path):
     if st.session_state.get("mode") == "live":
         st.page_link("pages/1_Live_run.py", label="Watch the shop live: probe chart and per-service health")
     if results or queue:
-        st.dataframe(runs_table(results, queue), hide_index=True, width="stretch")
-    analyst_notes(results)
+        st.dataframe(runs_table(results, queue), hide_index=True, width="stretch", height="content")
+    analyst_notes(results, newest_first=True)
 
 
 # ---------------------------------------------------------------- 3 results
@@ -214,8 +220,8 @@ def results_view(out: Path):
         return
     results, ranked = s["results"], s["ranked"]
     entries = [r["entry"] for r in results]
-    predicted = {r["id"]: r["item"]["predicted"] for r in results if r["item"].get("predicted")}
-    hits, judged = judge.hit_rate(predicted, {r["id"]: r["entry"] for r in results})
+    preds = {r["id"]: r["item"]["predicted"] for r in results if r["item"].get("predicted")}
+    hits, judged = judge.hit_rate(preds, {r["id"]: r["entry"] for r in results})
     st.header("3. Results")
     st.caption(f"Session {out.name}" + (f" · stopped: {s['stopped']}" if s.get("stopped") else ""))
     c1, c2, c3, c4 = st.columns(4)
@@ -223,20 +229,30 @@ def results_view(out: Path):
               help="krkn's formula: critical SLOs 3 points, warnings 1, points passed / total, over this pool.")
     c2.metric("Root causes found", len(judge.root_causes(ranked)),
               help="Distinct causes rated medium or high, each exposed by a mild or targeted fault.")
-    c3.metric("Planner hit rate", f"{hits} / {judged}", help="Predicted tier = measured tier.")
+    c3.metric("Planner hit rate", f"{hits} / {judged}" if judged else "not scored",
+              help="Predicted tier = measured tier. Not scored when the planner made no predictions.")
     c4.metric("Runs", f"{len(results)} / {s['budget']}")
     with st.container(border=True):
         st.write(s["summary"]["text"])
-        st.caption("Summary written by the planner model. Every number on this page comes from judge.py.")
+        no_ai = s["summary"]["text"].startswith("(no AI)")
+        st.caption("Written by rules: no model answered." if no_ai else
+                   "Summary written by the planner model. Every number on this page comes from judge.py.")
+    with st.container(horizontal=True):
+        report = (out / "report.md").read_text(encoding="utf-8")
+        st.download_button("Download report.md", report, file_name=f"{out.name}-report.md",
+                           mime="text/markdown", type="primary")
+        if st.button("New session"):
+            for k in ("session_dir", "proc", "mode"):
+                st.session_state.pop(k, None)
+            st.rerun()
 
     st.subheader("Findings, ranked by leverage")
-    why = {r["id"]: r["analysis"] for r in results}
     st.dataframe(pd.DataFrame([{
         "#": n, "Fault": r["id"], "Tier": r["tier"], "Strength": r["strength"], "Leverage": r["leverage"],
         "Root cause": r["cause"] + (" (repeat)" if r["repeat"] else ""), "What broke": "; ".join(r["effects"][:2]),
-        "Why (analyst)": why[r["id"]].get("why"), "Confidence": pct(why[r["id"]].get("confidence")),
-    } for n, r in enumerate(judge.findings(ranked), 1)]), hide_index=True, width="stretch",
+    } for n, r in enumerate(judge.findings(ranked), 1)]), hide_index=True, width="stretch", height="content",
         column_config={"Leverage": st.column_config.NumberColumn(format="%.2f", help="impact ÷ fault strength")})
+    st.caption("Why each one broke is in the analyst notes below.")
 
     st.subheader("Fixes, one per root cause")
     groups = list(s["groups"].items())
@@ -246,23 +262,27 @@ def results_view(out: Path):
             with col.container(border=True):
                 st.write(f"**{cause}**: {', '.join(ids)}")
                 st.write(f.get("fix") or "-")
-                st.caption(f"Change: {f.get('change') or '-'}")
-                st.caption(f"Verify with {f.get('verify_with')} · confidence {pct(f.get('confidence'))} · "
+                if f.get("change") and f.get("change") not in ("-", f.get("fix")):
+                    st.caption(f"Change: {f['change']}")
+                st.caption(f"Verify with {f.get('verify_with')}{conf(f.get('confidence'))} · "
                            f"{'from the fix catalog' if f.get('catalog_match') else 'not in the fix catalog'}")
 
     left, right = st.columns([7, 5])
     with left:
         st.subheader("Runs, in the planner's order")
-        st.dataframe(runs_table(results, []), hide_index=True, width="stretch")
-        analyst_notes(results)
+        st.dataframe(runs_table(results, []), hide_index=True, width="stretch", height="content")
     with right:
+        st.subheader("Analyst notes")
+        analyst_notes(results)
+    left, right = st.columns([7, 5])
+    with left:
         st.subheader("Suggested next")
         for n in s.get("next", []):
             st.write(f"`{'+'.join(n['ids'])}`: {n.get('why') or '-'}")
-            st.caption(f"from {n.get('source')}" + (f" · confidence {pct(n['confidence'])}"
-                                                    if isinstance(n.get("confidence"), (int, float)) else ""))
+            st.caption(f"from {n.get('source')}{conf(n.get('confidence'))}")
         if not s.get("next"):
             st.write("Nothing suggested.")
+    with right:
         if s["summary"].get("ideas"):
             st.subheader("Ideas")
             st.caption("Not runnable until someone adds them to experiments.toml.")
@@ -273,15 +293,6 @@ def results_view(out: Path):
             st.subheader("Not run")
             for line in not_run:
                 st.write(f"- {line}")
-    report = (out / "report.md").read_text(encoding="utf-8")
-    d1, d2 = st.columns([3, 9])
-    d1.download_button("Download report.md", report, file_name=f"{out.name}-report.md", mime="text/markdown")
-    if d2.button("New session"):
-        for k in ("session_dir", "proc", "mode"):
-            st.session_state.pop(k, None)
-        st.rerun()
-    with st.expander("Full report"):
-        st.markdown(report)
 
 
 current = st.session_state.get("session_dir")
