@@ -5,12 +5,12 @@
       {
         "kind": "errors",
         "service": "checkout",
-        "what": "checkout errors 0% -> 93% (14/15 calls)"
+        "what": "checkout errors 0% -> 100% (10/10 calls)"
       },
       {
         "kind": "errors",
         "service": "payment",
-        "what": "payment errors 0% -> 87% (13/15 calls)"
+        "what": "payment errors 0% -> 100% (12/12 calls)"
       }
     ],
     "fault": "control: every charge fails",
@@ -24,11 +24,21 @@
     "shop": {
       "probes": 120,
       "failed": 0,
-      "p95_ms": 7,
-      "max_ms": 8
+      "p95_ms": 6,
+      "max_ms": 10
     },
     "baseline_p95_ms": 5,
-    "measured_at": "2026-10-10T15:45:18+00:00",
+    "measured_at": "2026-10-10T16:50:23+00:00",
+    "windows": {
+      "baseline": [
+        1791650534,
+        1791650834
+      ],
+      "fault": [
+        1791650839,
+        1791651019
+      ]
+    },
     "control": {
       "expected": "high",
       "pass": true
@@ -40,7 +50,7 @@
       {
         "kind": "cpu",
         "service": "ad",
-        "what": "ad CPU 0.00 -> 3.79 cores"
+        "what": "ad CPU 0.00 -> 2.52 cores"
       }
     ],
     "fault": "control: high CPU in the ad service",
@@ -55,13 +65,622 @@
       "probes": 120,
       "failed": 0,
       "p95_ms": 7,
-      "max_ms": 17
+      "max_ms": 19
     },
-    "baseline_p95_ms": 5,
-    "measured_at": "2026-10-10T15:48:23+00:00",
+    "baseline_p95_ms": 6,
+    "measured_at": "2026-10-10T16:53:33+00:00",
+    "windows": {
+      "baseline": [
+        1791650534,
+        1791650834
+      ],
+      "fault": [
+        1791651029,
+        1791651209
+      ]
+    },
     "control": {
       "expected": "low",
       "pass": true
+    }
+  },
+  "catalog-kill": {
+    "tier": "high",
+    "effects": [
+      {
+        "kind": "kill-switch",
+        "what": "error_rate: 3/3 probes failed in last 5s, limit 50%"
+      },
+      {
+        "kind": "shop-down",
+        "what": "3/26 shop probes failed"
+      },
+      {
+        "kind": "no-recovery",
+        "what": "shop not healthy 120 s after the fault"
+      },
+      {
+        "kind": "throughput",
+        "service": "ad",
+        "what": "ad served 0.52 -> 0.26 req/s"
+      },
+      {
+        "kind": "throughput",
+        "service": "cart",
+        "what": "cart served 1.45 -> 0.5 req/s"
+      },
+      {
+        "kind": "throughput",
+        "service": "currency",
+        "what": "currency served 1.07 -> 0.25 req/s"
+      },
+      {
+        "kind": "throughput",
+        "service": "flagd",
+        "what": "flagd served 9.53 -> 2.76 req/s"
+      },
+      {
+        "kind": "throughput",
+        "service": "frontend-proxy",
+        "what": "frontend-proxy served 18.67 -> 9.08 req/s"
+      },
+      {
+        "kind": "throughput",
+        "service": "image-provider",
+        "what": "image-provider served 4.1 -> 0.53 req/s"
+      },
+      {
+        "kind": "throughput",
+        "service": "recommendation",
+        "what": "recommendation served 0.86 -> 0.27 req/s"
+      },
+      {
+        "kind": "latency",
+        "service": "agent",
+        "what": "agent p95 200 -> 14500 ms"
+      },
+      {
+        "kind": "latency",
+        "service": "flagd",
+        "what": "flagd p95 2 -> 2702 ms"
+      },
+      {
+        "kind": "errors",
+        "service": "frontend",
+        "what": "frontend errors 0% -> 12% (278/2296 calls)"
+      },
+      {
+        "kind": "latency",
+        "service": "frontend",
+        "what": "frontend p95 32 -> 15000 ms"
+      },
+      {
+        "kind": "latency",
+        "service": "frontend-proxy",
+        "what": "frontend-proxy p95 29 -> 4422 ms"
+      }
+    ],
+    "fault": "product catalog pod killed",
+    "scenario": "pod-scenarios",
+    "params": {
+      "namespace": "^otel-demo$",
+      "pod-label": "opentelemetry.io/name=product-catalog",
+      "disruption-count": 1,
+      "expected-recovery-time": 120
+    },
+    "recovery_s": null,
+    "shop": {
+      "probes": 26,
+      "failed": 3,
+      "p95_ms": 2000,
+      "max_ms": 2000
+    },
+    "baseline_p95_ms": 6,
+    "measured_at": "2026-10-10T17:30:41+00:00",
+    "windows": {
+      "baseline": [
+        1791652922,
+        1791653222
+      ],
+      "fault": [
+        1791653226,
+        1791653436
+      ]
+    }
+  },
+  "payment-kill": {
+    "tier": "low",
+    "effects": [],
+    "fault": "payment pod killed",
+    "scenario": "pod-scenarios",
+    "params": {
+      "namespace": "^otel-demo$",
+      "pod-label": "opentelemetry.io/name=payment",
+      "disruption-count": 1,
+      "expected-recovery-time": 120
+    },
+    "recovery_s": 0.0,
+    "shop": {
+      "probes": 57,
+      "failed": 0,
+      "p95_ms": 10,
+      "max_ms": 12
+    },
+    "baseline_p95_ms": 5,
+    "measured_at": "2026-10-10T17:32:48+00:00",
+    "windows": {
+      "baseline": [
+        1791652922,
+        1791653222
+      ],
+      "fault": [
+        1791653446,
+        1791653563
+      ]
+    }
+  },
+  "recommendation-cutoff": {
+    "tier": "medium",
+    "effects": [
+      {
+        "kind": "throughput",
+        "service": "flagd",
+        "what": "flagd served 9.53 -> 3.08 req/s"
+      },
+      {
+        "kind": "latency",
+        "service": "flagd",
+        "what": "flagd p95 2 -> 3266 ms"
+      },
+      {
+        "kind": "latency",
+        "service": "frontend-proxy",
+        "what": "frontend-proxy p95 29 -> 2357 ms"
+      }
+    ],
+    "fault": "nothing can reach recommendation (ingress :8080 dropped)",
+    "scenario": "pod-network-filter",
+    "params": {
+      "chaos-duration": 120,
+      "namespace": "otel-demo",
+      "pod-selector": "opentelemetry.io/name=recommendation",
+      "ingress": "true",
+      "egress": "false",
+      "ports": 8080
+    },
+    "recovery_s": 0.0,
+    "shop": {
+      "probes": 151,
+      "failed": 0,
+      "p95_ms": 7,
+      "max_ms": 8
+    },
+    "baseline_p95_ms": 6,
+    "measured_at": "2026-10-10T17:36:29+00:00",
+    "windows": {
+      "baseline": [
+        1791652922,
+        1791653222
+      ],
+      "fault": [
+        1791653573,
+        1791653784
+      ]
+    }
+  },
+  "catalog-db-cutoff": {
+    "tier": "high",
+    "effects": [
+      {
+        "kind": "kill-switch",
+        "what": "error_rate: 3/3 probes failed in last 5s, limit 50%"
+      },
+      {
+        "kind": "throughput",
+        "service": "recommendation",
+        "what": "recommendation served 0.86 -> 0.27 req/s"
+      },
+      {
+        "kind": "errors",
+        "service": "frontend",
+        "what": "frontend errors 0% -> 9% (262/2954 calls)"
+      },
+      {
+        "kind": "latency",
+        "service": "frontend",
+        "what": "frontend p95 32 -> 15000 ms"
+      },
+      {
+        "kind": "latency",
+        "service": "recommendation",
+        "what": "recommendation p95 6 -> 15000 ms"
+      }
+    ],
+    "fault": "product catalog loses its Postgres database (egress :5432 dropped)",
+    "scenario": "pod-network-filter",
+    "params": {
+      "chaos-duration": 120,
+      "namespace": "otel-demo",
+      "pod-selector": "opentelemetry.io/name=product-catalog",
+      "ingress": "false",
+      "egress": "true",
+      "ports": 5432
+    },
+    "recovery_s": 4.1,
+    "shop": {
+      "probes": 32,
+      "failed": 3,
+      "p95_ms": 2000,
+      "max_ms": 2000
+    },
+    "baseline_p95_ms": 6,
+    "measured_at": "2026-10-10T17:38:19+00:00",
+    "windows": {
+      "baseline": [
+        1791652922,
+        1791653222
+      ],
+      "fault": [
+        1791653794,
+        1791653894
+      ]
+    }
+  },
+  "blast-latency": {
+    "tier": "medium",
+    "effects": [
+      {
+        "kind": "latency",
+        "service": "agent",
+        "what": "agent p95 195 -> 930 ms"
+      },
+      {
+        "kind": "latency",
+        "service": "checkout",
+        "what": "checkout p95 48 -> 3650 ms"
+      },
+      {
+        "kind": "latency",
+        "service": "email",
+        "what": "email p95 7 -> 387 ms"
+      },
+      {
+        "kind": "latency",
+        "service": "frontend",
+        "what": "frontend p95 33 -> 996 ms"
+      },
+      {
+        "kind": "latency",
+        "service": "frontend-proxy",
+        "what": "frontend-proxy p95 31 -> 1102 ms"
+      },
+      {
+        "kind": "latency",
+        "service": "product-catalog",
+        "what": "product-catalog p95 27 -> 746 ms"
+      },
+      {
+        "kind": "latency",
+        "service": "shipping",
+        "what": "shipping p95 4 -> 384 ms"
+      }
+    ],
+    "fault": "+200 ms on everything leaving the backend node",
+    "scenario": "node-network-chaos",
+    "params": {
+      "node-name": "chaos-worker",
+      "latency": "200ms",
+      "loss": "0",
+      "bandwidth": "10gbit",
+      "test-duration": 120
+    },
+    "recovery_s": 0.0,
+    "shop": {
+      "probes": 153,
+      "failed": 0,
+      "p95_ms": 207,
+      "max_ms": 208
+    },
+    "baseline_p95_ms": 5,
+    "measured_at": "2026-10-10T18:07:52+00:00",
+    "windows": {
+      "baseline": [
+        1791654835,
+        1791655135
+      ],
+      "fault": [
+        1791655454,
+        1791655667
+      ]
+    }
+  },
+  "blast-memory": {
+    "tier": "low",
+    "effects": [
+      {
+        "kind": "latency",
+        "service": "ad",
+        "what": "ad p95 4 -> 64 ms"
+      },
+      {
+        "kind": "cpu",
+        "service": "krkn-hog",
+        "what": "krkn-hog CPU 0.00 -> 0.38 cores"
+      },
+      {
+        "kind": "memory",
+        "service": "krkn-hog",
+        "what": "krkn-hog memory 0 -> 1049 MiB"
+      }
+    ],
+    "fault": "1 GiB memory pressure on the backend node",
+    "scenario": "node-memory-hog",
+    "params": {
+      "chaos-duration": 120,
+      "memory-consumption": "1g",
+      "memory-workers": 1,
+      "namespace": "otel-demo",
+      "node-selector": "kubernetes.io/hostname=chaos-worker"
+    },
+    "recovery_s": 0.0,
+    "shop": {
+      "probes": 154,
+      "failed": 0,
+      "p95_ms": 12,
+      "max_ms": 18
+    },
+    "baseline_p95_ms": 4,
+    "measured_at": "2026-10-10T17:49:37+00:00",
+    "windows": {
+      "baseline": [
+        1791652922,
+        1791653222
+      ],
+      "fault": [
+        1791654359,
+        1791654573
+      ]
+    }
+  },
+  "cart-wipe": {
+    "tier": "high",
+    "effects": [
+      {
+        "kind": "data-loss",
+        "what": "cart items 1 -> 0"
+      },
+      {
+        "kind": "latency",
+        "service": "ad",
+        "what": "ad p95 4 -> 148 ms"
+      }
+    ],
+    "fault": "cart store (valkey-cart) pod killed; it has no volume",
+    "scenario": "pod-scenarios",
+    "params": {
+      "namespace": "^otel-demo$",
+      "pod-label": "opentelemetry.io/name=valkey-cart",
+      "disruption-count": 1,
+      "expected-recovery-time": 120
+    },
+    "recovery_s": 0.0,
+    "shop": {
+      "probes": 26,
+      "failed": 0,
+      "p95_ms": 9,
+      "max_ms": 9,
+      "cart_items": {
+        "before": 1,
+        "after": 0
+      }
+    },
+    "baseline_p95_ms": 7,
+    "measured_at": "2026-10-10T17:51:13+00:00",
+    "windows": {
+      "baseline": [
+        1791652922,
+        1791653222
+      ],
+      "fault": [
+        1791654582,
+        1791654668
+      ]
+    }
+  },
+  "cpu-starve": {
+    "tier": "medium",
+    "effects": [
+      {
+        "kind": "latency",
+        "service": "checkout",
+        "what": "checkout p95 48 -> 330 ms"
+      }
+    ],
+    "fault": "100 % CPU hog on the backend node",
+    "scenario": "node-cpu-hog",
+    "params": {
+      "chaos-duration": 60,
+      "cpu-percentage": 100,
+      "namespace": "otel-demo",
+      "node-selector": "kubernetes.io/hostname=chaos-worker"
+    },
+    "recovery_s": 0.0,
+    "shop": {
+      "probes": 91,
+      "failed": 0,
+      "p95_ms": 22,
+      "max_ms": 150
+    },
+    "baseline_p95_ms": 6,
+    "measured_at": "2026-10-10T17:18:04+00:00",
+    "windows": {
+      "baseline": [
+        1791650534,
+        1791650834
+      ],
+      "fault": [
+        1791652528,
+        1791652679
+      ]
+    }
+  },
+  "kafka-outage": {
+    "tier": "low",
+    "effects": [
+      {
+        "kind": "latency",
+        "service": "ad",
+        "what": "ad p95 4 -> 280 ms"
+      }
+    ],
+    "fault": "kafka pod killed",
+    "scenario": "pod-scenarios",
+    "params": {
+      "namespace": "^otel-demo$",
+      "pod-label": "opentelemetry.io/name=kafka",
+      "disruption-count": 1,
+      "expected-recovery-time": 120
+    },
+    "recovery_s": 0.0,
+    "shop": {
+      "probes": 28,
+      "failed": 0,
+      "p95_ms": 9,
+      "max_ms": 9
+    },
+    "baseline_p95_ms": 7,
+    "measured_at": "2026-10-10T17:52:51+00:00",
+    "windows": {
+      "baseline": [
+        1791652922,
+        1791653222
+      ],
+      "fault": [
+        1791654678,
+        1791654766
+      ]
+    }
+  },
+  "blast-loss": {
+    "tier": "high",
+    "effects": [
+      {
+        "kind": "latency",
+        "service": "ad",
+        "what": "ad p95 41 -> 287 ms"
+      },
+      {
+        "kind": "latency",
+        "service": "agent",
+        "what": "agent p95 195 -> 390 ms"
+      },
+      {
+        "kind": "errors",
+        "service": "checkout",
+        "what": "checkout errors 0% -> 56% (5/9 calls)"
+      },
+      {
+        "kind": "latency",
+        "service": "checkout",
+        "what": "checkout p95 48 -> 9583 ms"
+      },
+      {
+        "kind": "latency",
+        "service": "frontend",
+        "what": "frontend p95 33 -> 232 ms"
+      },
+      {
+        "kind": "latency",
+        "service": "frontend-proxy",
+        "what": "frontend-proxy p95 31 -> 282 ms"
+      },
+      {
+        "kind": "errors",
+        "service": "shipping",
+        "what": "shipping errors 0% -> 29% (12/41 calls)"
+      },
+      {
+        "kind": "latency",
+        "service": "shipping",
+        "what": "shipping p95 4 -> 9179 ms"
+      },
+      {
+        "kind": "restart",
+        "what": "pod ad-6667d5966-68v2k restarted 2x"
+      }
+    ],
+    "fault": "10 % packet loss on everything leaving the backend node",
+    "scenario": "node-network-chaos",
+    "params": {
+      "node-name": "chaos-worker",
+      "latency": "0ms",
+      "loss": "10",
+      "bandwidth": "10gbit",
+      "test-duration": 120
+    },
+    "recovery_s": 0.0,
+    "shop": {
+      "probes": 154,
+      "failed": 0,
+      "p95_ms": 96,
+      "max_ms": 433
+    },
+    "baseline_p95_ms": 5,
+    "measured_at": "2026-10-10T18:11:35+00:00",
+    "windows": {
+      "baseline": [
+        1791654835,
+        1791655135
+      ],
+      "fault": [
+        1791655677,
+        1791655891
+      ]
+    }
+  },
+  "quote-garbage": {
+    "tier": "high",
+    "effects": [
+      {
+        "kind": "latency",
+        "service": "agent",
+        "what": "agent p95 195 -> 760 ms"
+      },
+      {
+        "kind": "errors",
+        "service": "checkout",
+        "what": "checkout errors 0% -> 58% (11/19 calls)"
+      },
+      {
+        "kind": "errors",
+        "service": "shipping",
+        "what": "shipping errors 0% -> 52% (41/79 calls)"
+      }
+    ],
+    "fault": "quote answers 200 OK with a body that isn't a quote",
+    "scenario": "service-hijacking",
+    "params": {
+      "scenario-file-path": "scenarios/quote-garbage.yaml",
+      "disable-image-signature": "true"
+    },
+    "recovery_s": 0.0,
+    "shop": {
+      "probes": 244,
+      "failed": 0,
+      "p95_ms": 7,
+      "max_ms": 12
+    },
+    "baseline_p95_ms": 5,
+    "measured_at": "2026-10-10T18:04:09+00:00",
+    "windows": {
+      "baseline": [
+        1791654835,
+        1791655135
+      ],
+      "fault": [
+        1791655140,
+        1791655444
+      ]
     }
   }
 }
