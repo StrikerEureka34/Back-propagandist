@@ -16,13 +16,18 @@ import urllib.request
 # ponytail: data stores recognised by port; add a port when a new store type shows up
 DATA_PORTS = {5432: "postgres", 6379: "valkey/redis", 9092: "kafka", 27017: "mongodb", 3306: "mysql"}
 HUB_CALLERS = 3
+# Our own telemetry, not the app. Never a target: breaking it blinds the kill switch.
+MONITORING = {"jaeger", "prometheus", "grafana", "opensearch", "telemetry-docs", "opamp-server",
+              "otel-collector"}
 
 
 def build(jaeger_deps: list[dict], workloads: dict) -> dict:
     """jaeger_deps: Jaeger /api/dependencies `data`; workloads: `kubectl get deploy -o json`."""
-    pods = {w["metadata"]["name"]: w["spec"] for w in workloads["items"]}
+    pods = {w["metadata"]["name"]: w["spec"] for w in workloads["items"]
+            if w["metadata"]["name"] not in MONITORING}
     edges = {(d["parent"], d["child"]): {"calls": d["callCount"], "source": "jaeger"}
-             for d in jaeger_deps if d["parent"] != d["child"]}
+             for d in jaeger_deps
+             if d["parent"] != d["child"] and not {d["parent"], d["child"]} & MONITORING}
 
     for name, spec in pods.items():
         containers = spec["template"]["spec"]["containers"]
@@ -68,7 +73,8 @@ def coverage(graph: dict, documented: list[list[str]]) -> dict:
 def to_dot(graph: dict) -> str:
     lines = ["digraph deps {", "  rankdir=LR;"]
     for name, n in graph["nodes"].items():
-        label = "\\n".join([name, *n["flags"]])
+        # single-replica is true of every service here, so it stays in the data but not the picture
+        label = "\\n".join([name, *(f for f in n["flags"] if f != "single-replica")])
         shape = "cylinder" if n["store"] else "box"
         bold = ", penwidth=2" if "no-persistence" in n["flags"] or "hub" in n["flags"] else ""
         lines.append(f'  "{name}" [shape={shape}, label="{label}"{bold}];')

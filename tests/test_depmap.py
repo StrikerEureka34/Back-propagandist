@@ -54,6 +54,15 @@ def test_risk_flags():
     assert "single-replica" in nodes["payment"]["flags"]
 
 
+def test_monitoring_stack_is_not_on_the_map():
+    # killing our own telemetry would blind the kill switch, so it must never be a target
+    deps = json.loads((FIXTURES / "jaeger_deps.json").read_text())["data"]
+    deps.append({"parent": "frontend-proxy", "child": "jaeger", "callCount": 2})
+    g = depmap.build(deps, json.loads((FIXTURES / "deployments.json").read_text()))
+    assert "jaeger" not in g["nodes"] and "opamp-server" not in g["nodes"]
+    assert not any({e["from"], e["to"]} & depmap.MONITORING for e in g["edges"])
+
+
 def test_coverage_against_official_diagram():
     documented = json.loads((Path(__file__).parent.parent / "docs" / "official_edges.json")
                             .read_text())["edges"]
@@ -68,6 +77,7 @@ def test_coverage_against_official_diagram():
 def test_dot_marks_stores_and_env_edges():
     dot = depmap.to_dot(graph())
     assert dot.startswith("digraph")
+    assert "single-replica" not in dot  # true of every service, so it is only noise
     assert '"valkey-cart" [shape=cylinder' in dot
     assert '"cart" -> "valkey-cart" [style=dashed]' in dot
     assert '"frontend" -> "product-catalog" [label="174"]' in dot
