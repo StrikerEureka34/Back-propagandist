@@ -218,7 +218,18 @@ def watch(out: Path):
         st.code(log)
         return
     results, queue = progress.get("results", []), progress.get("queue", [])
-    st.header("2. Run")
+    head, kill = st.columns([4, 1], vertical_alignment="center")
+    head.header("2. Run")
+    if chaos.stop_requested():
+        st.warning("Emergency stop pressed. The running fault is stopped and cleaned up within about a second, "
+                   "nothing new starts, and the agent writes the report from the runs so far.")
+    elif kill.button(":red[Emergency stop]", key=f"kill-{out.name}", width="stretch",
+                     help="Immediately stops the fault that is running, removes anything it left in the shop, "
+                          "cancels any run waiting for your approval, and ends the session. The report is "
+                          "written from the runs finished so far."):
+        chaos.RUNS.mkdir(exist_ok=True)
+        (chaos.RUNS / "STOP").write_text("")  # what every runner and wait checks
+        st.rerun(scope="fragment")
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Runs", f"{len(results)} / {progress.get('budget')}")
     b = progress.get("budget")
