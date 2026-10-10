@@ -15,7 +15,8 @@ def fake_ask(answers: dict):
         kind = "plan" if role == "orchestrator" and "Plan" in system else role
         kind = "final" if role == "orchestrator" and "summary" in system else kind
         kind = "fixer" if "fix catalog" in system else kind
-        return answers.get(kind)
+        answer = answers.get(kind)
+        return {**answer, "_by": "test/fake-model"} if answer is not None else None  # like agent.ask
     return ask
 
 
@@ -79,10 +80,37 @@ def test_ask_falls_back_to_the_other_provider_and_caches(tmp_path, monkeypatch):
             raise RuntimeError("groq HTTP 429")
         return 'Sure:\n```json\n{"ok": 1}\n```'
     monkeypatch.setattr(agent.llm, "llm", fake_llm)
-    assert agent.ask("orchestrator", "sys", "hello", "ok") == {"ok": 1}
+    nemotron = agent.llm.OPENAI_STYLE["openrouter"][2]
+    assert agent.ask("orchestrator", "sys", "hello", "ok") == {"ok": 1, "_by": nemotron}  # says who answered
     assert calls == ["groq", "openrouter"]
-    assert agent.ask("orchestrator", "sys", "hello", "ok") == {"ok": 1}  # cached: no new call
+    assert agent.ask("orchestrator", "sys", "hello", "ok") == {"ok": 1, "_by": nemotron}  # cached: no new call
     assert calls == ["groq", "openrouter"]
+
+
+def test_a_short_rate_limit_is_waited_out_not_handed_to_the_fallback(tmp_path, monkeypatch):
+    monkeypatch.setattr(agent, "CACHE", tmp_path)
+    calls, waits = [], []
+
+    def fake_llm(prompt, system=None, model=None, max_tokens=None, provider=None, **_):
+        calls.append(provider)
+        if len(calls) == 1:
+            raise RuntimeError('groq HTTP 429: {"error":{"message":"Rate limit reached for model on tokens '
+                               'per minute (TPM): Limit 8000, Used 7215, Requested 4831. Please try again in 7.5s."}}')
+        return '{"queue": [{"ids": ["blast-loss"]}]}'
+    monkeypatch.setattr(agent.llm, "llm", fake_llm)
+    monkeypatch.setattr(agent.time, "sleep", waits.append)
+    answer = agent.ask("orchestrator", "sys", "plan", "queue")
+    assert calls == ["groq", "groq"] and waits == [8.5]  # waited as asked, then Groq again
+    assert answer["_by"] == agent.llm.OPENAI_STYLE["groq"][2]
+
+
+def test_a_planner_that_ranks_one_fault_still_runs_the_budget(tmp_path):
+    one = {"queue": [{"ids": ["cart-wipe"], "hypothesis": "carts live in memory", "predicted": "high", "confidence": 0.8}]}
+    state = run_session(fake_ask({"plan": one, "worker": ANALYST, "fixer": FIXER, "final": FINAL}), tmp_path, budget=3)
+    ran = [r["id"] for r in state["results"]]
+    assert ran[0] == "cart-wipe" and len(ran) == 3  # the planner's pick first, then rules fill the budget
+    assert all(r["item"].get("ranked_by") == "rules" for r in state["results"][1:])
+    assert "added by rules" in state["results"][1]["item"]["hypothesis"]
 
 
 def test_json_takes_the_answer_not_the_echoed_example():

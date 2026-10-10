@@ -19,6 +19,7 @@ import streamlit as st
 import bank
 import chaos
 import judge
+from agent import short
 
 ROOT = Path(__file__).resolve().parent.parent
 RUNS = ROOT / "runs"
@@ -44,6 +45,20 @@ def conf(value, prefix: str = " · confidence ") -> str:
 @st.cache_data(ttl=10, show_spinner=False)
 def cluster_up() -> bool:
     return chaos.probe_once(f"{chaos.SHOP}/api/products")[0]
+
+
+def pid_alive(pid) -> bool:
+    """Is the agent still running? After a page reload the Popen handle is gone, so check its pid.
+    POSIX only: on Windows os.kill(pid, 0) would terminate the process, so assume it's alive."""
+    if not isinstance(pid, int) or os.name == "nt":
+        return True
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        pass
+    return True
 
 
 def sessions() -> list[Path]:
@@ -162,7 +177,8 @@ def analyst_notes(results: list[dict], newest_first: bool = False):
             st.write(f"Why: {a.get('why') or '-'}")
             if a.get("flag"):
                 st.warning(a["flag"])
-            st.caption(f"Evidence: {', '.join(a.get('evidence', [])) or 'none cited'}"
+            by = short(a["_by"]) if a.get("_by") else "rules" if str(a.get("why", "")).startswith("(no AI)") else ""
+            st.caption((f"By {by}. " if by else "") + f"Evidence: {', '.join(a.get('evidence', [])) or 'none cited'}"
                        + conf(a.get("confidence"), ". Analyst confidence ") + ".")
 
 
@@ -173,9 +189,11 @@ def watch(out: Path):
     proc = st.session_state.get("proc")
     if (out / "session.json").exists():
         st.rerun()  # finished: switch to the results view
-    if proc is not None and proc.poll() is not None:
+    gone = proc.poll() is not None if proc is not None else not pid_alive(progress.get("pid"))
+    if gone:
         log = (out / "agent.log").read_text(encoding="utf-8", errors="replace")[-1500:]
-        st.error(f"The agent stopped before finishing (exit {proc.returncode}). Last lines of its log:")
+        code = f" (exit {proc.returncode})" if proc is not None else ""
+        st.error(f"The agent stopped before finishing{code}. Last lines of its log:")
         st.code(log)
         return
     results, queue = progress.get("results", []), progress.get("queue", [])
@@ -183,7 +201,8 @@ def watch(out: Path):
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Runs", f"{len(results)} / {progress.get('budget')}")
     c2.metric("Queued", len(queue))
-    c3.metric("Planner", "-" if progress.get("plan_ai") is None else "gpt-oss" if progress["plan_ai"] else "rules (no AI)")
+    c3.metric("Planner", "-" if progress.get("plan_ai") is None else short(progress.get("plan_by"))
+              if progress["plan_ai"] else "rules (no AI)", help="The model that actually answered the plan.")
     c4.metric("Status", "Waiting for you" if pending else STAGES.get(progress["stage"], progress["stage"]))
     if pending:
         with st.container(border=True):
@@ -202,8 +221,13 @@ def watch(out: Path):
                 decide(out, "skip")
             if b3.button("Stop the session", key=f"stop-{key}", width="stretch"):
                 decide(out, "stop")
-    elif progress["stage"] in ("starting", "plan"):
+    elif progress["stage"] == "starting":
         st.info("The planner is ordering the faults. This takes up to a minute.")
+    elif progress["stage"] == "plan":
+        st.info("Planned. The first approval card appears here in a moment.")
+    elif progress["stage"] == "run_next" and not pending:
+        st.info("A fault is running, or the analyst is explaining the last one. Live runs take 6 to 7 "
+                "minutes each, including a cool-down so faults don't blur each other's baseline.")
     if st.session_state.get("mode") == "live":
         st.page_link("pages/1_Live_run.py", label="Watch the shop live: probe chart and per-service health")
     if results or queue:
@@ -236,7 +260,8 @@ def results_view(out: Path):
         st.write(s["summary"]["text"])
         no_ai = s["summary"]["text"].startswith("(no AI)")
         st.caption("Written by rules: no model answered." if no_ai else
-                   "Summary written by the planner model. Every number on this page comes from judge.py.")
+                   f"Summary by {short(s['summary']['by']) if s['summary'].get('by') else 'the planner model'}. "
+                   "Every number on this page comes from judge.py.")
     with st.container(horizontal=True):
         report = (out / "report.md").read_text(encoding="utf-8")
         st.download_button("Download report.md", report, file_name=f"{out.name}-report.md",

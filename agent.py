@@ -43,8 +43,9 @@ BRIEF = " Keep every text field under 25 words."
 TIERS = ("high", "medium", "low")
 
 PLAN_SYSTEM = (
-    "Plan a chaos-engineering session on an online shop. Order the candidate faults by expected "
-    "leverage: the biggest customer impact from the weakest fault. Only use ids and pairs from the "
+    "Plan a chaos-engineering session on an online shop. Rank every candidate fault by expected "
+    "leverage: the biggest customer impact from the weakest fault. The code runs them in your order "
+    "until the run budget is used, so list them all. Only use ids and pairs from the "
     "candidates given; never invent one. For each, give a testable hypothesis, the tier you predict "
     "(high, medium or low), a one-line reason that cites the map or the service facts, and a "
     "confidence from 0 to 1. Reply with one JSON object only.")
@@ -78,29 +79,53 @@ def _json(text: str, need: str) -> dict | None:
     return found
 
 
+def _call(provider: str, prompt: str, system: str, model: str | None) -> str:
+    """One provider call. On a short rate limit (Groq: "Please try again in 22.1s"), wait as long
+    as asked, up to 30 s, and retry once: back-to-back sessions hit Groq's tokens-per-minute cap,
+    and falling back to the slower model for a 20-second wait is the worse deal."""
+    for _ in range(2):
+        try:
+            return llm.llm(prompt, system=system, model=model, max_tokens=MAX_TOKENS[provider], provider=provider)
+        except RuntimeError as e:
+            wait = re.search(r"try again in ([\d.]+)s", str(e))
+            if not wait or float(wait.group(1)) > 30:
+                raise
+            print(f"  {provider}: rate limited, waiting {float(wait.group(1)):.0f} s", file=sys.stderr, flush=True)
+            time.sleep(float(wait.group(1)) + 1)
+    raise RuntimeError(f"{provider}: still rate limited after waiting")
+
+
 def ask(role: str, system: str, prompt: str, need: str) -> dict | None:
     """One sub-agent call: the role's provider, then the other, one JSON retry each, cached.
     Returns None when every provider fails, and the caller falls back to rules ("no AI").
-    The raw reply is kept next to the cache entry, to check what a model actually said."""
+    Every answer says which model gave it ("_by"), and the raw reply is kept next to the cache
+    entry, to check what a model actually said."""
     key = hashlib.sha256(json.dumps([role, system, prompt]).encode()).hexdigest()[:24]
     hit = CACHE / f"{key}.json"
     if hit.exists():
-        return json.loads(hit.read_text(encoding="utf-8"))["answer"]
-    model = os.environ.get(f"{role.upper()}_MODEL")
+        cached = json.loads(hit.read_text(encoding="utf-8"))
+        return {**cached["answer"], "_by": cached.get("by", cached["provider"])}
     CACHE.mkdir(parents=True, exist_ok=True)
     for i, provider in enumerate(ROLES[role]):
-        for attempt in (prompt, prompt + "\n\nReply with exactly one JSON object, no prose, no placeholders."):
+        model = (os.environ.get(f"{role.upper()}_MODEL") if i == 0 else None) or llm.OPENAI_STYLE[provider][2]
+        retry = "\n\nReply with exactly one JSON object, no prose, no placeholders."
+        # nemotron thinks out loud and can run out of tokens before the JSON: its retry skips thinking
+        for attempt, sys_extra in ((prompt, ""), (prompt + retry, "\n/no_think" if provider == "openrouter" else "")):
             try:
-                text = llm.llm(attempt, system=system + BRIEF, model=model if i == 0 else None,
-                               max_tokens=MAX_TOKENS[provider], provider=provider)
+                text = _call(provider, attempt, system + BRIEF + sys_extra, model)
             except RuntimeError as e:
-                print(f"  {role}: {provider} failed ({str(e)[:80]}), trying the next one", file=sys.stderr)
+                print(f"  {role}: {provider} failed ({str(e)[:120]}), trying the next one", file=sys.stderr, flush=True)
                 break
             (CACHE / f"{key}.{provider}.raw.txt").write_text(text or "", encoding="utf-8")
             if (answer := _json(text, need)) is not None:
-                hit.write_text(json.dumps({"provider": provider, "answer": answer}), encoding="utf-8")
-                return answer
+                hit.write_text(json.dumps({"provider": provider, "by": model, "answer": answer}), encoding="utf-8")
+                return {**answer, "_by": model}
     return None
+
+
+def short(model: str | None) -> str:
+    """'openai/gpt-oss-120b' -> 'gpt-oss-120b'; 'nvidia/nemotron-3.5-lightning:free' -> 'nemotron-3.5-lightning'."""
+    return (model or "rules").split("/")[-1].removesuffix(":free")
 
 
 # ---------------------------------------------------------------- runners and the person
@@ -201,6 +226,7 @@ class Session(TypedDict, total=False):
     next: list[dict]
     stopped: str
     plan_ai: bool
+    plan_by: str
     rejected_pairs: list[dict]
     ranked: list[dict]
     groups: dict
@@ -256,7 +282,8 @@ def build(deps: Deps, out: Path):
             f"- {i}: {by_id[i].get('note') or by_id[i]['scenario']} | scenario {by_id[i]['scenario']} | "
             f"strength {judge.strength(by_id[i])} | target {_target(by_id[i])} ({_map_facts(deps.graph, _target(by_id[i]))})"
             + (f" | measured before: {deps.prior[i]}" if i in deps.prior else "") for i in pool)
-        prompt = (f"Run budget: {state['budget']} faults.\nCandidate faults:\n{rows}\n\nCandidate pairs (code-checked):\n"
+        prompt = (f"Run budget: {state['budget']} faults. Rank all {len(pool)} candidates; the first ones that "
+                  f"fit the budget run.\nCandidate faults:\n{rows}\n\nCandidate pairs (code-checked):\n"
                   + ("\n".join(f"- {'+'.join(p['ids'])}: {p['reason']}" for p in pairs) or "- none")
                   + f"\n\nService facts:\n{_doc('service-facts')}\n\n"
                   "Answer with one JSON object shaped like this example (one id per single fault, two "
@@ -265,7 +292,8 @@ def build(deps: Deps, out: Path):
                   '"confidence": 0.6}], "suggestions": [{"ids": ["<id>"], "why": "...", "confidence": 0.4}]}')
         answer = deps.ask("orchestrator", PLAN_SYSTEM, prompt, "queue")
         queue, dropped, seen = [], [], set()
-        state = {**state, "next": [], "dropped": [], "plan_ai": answer is not None}
+        state = {**state, "next": [], "dropped": [], "plan_ai": answer is not None,
+                 "plan_by": (answer or {}).get("_by")}
         for item in (answer or {}).get("queue", []):
             ids = [i for i in item.get("ids", []) if isinstance(i, str)]
             key = "+".join(ids)
@@ -283,8 +311,9 @@ def build(deps: Deps, out: Path):
                 dropped.append(key or "?")
         for i in sorted(pool, key=lambda i: judge.STRENGTH[judge.strength(by_id[i])]):  # whatever it left out
             if i not in seen:
-                queue.append({"ids": [i], "predicted": None, "confidence": None,
-                              "hypothesis": "(no AI) not ranked by the planner" if answer else "(no AI) mildest fault first",
+                queue.append({"ids": [i], "predicted": None, "confidence": None, "ranked_by": "rules",
+                              "hypothesis": "not ranked by the planner: added by rules, mildest fault first"
+                              if answer else "(no AI) mildest fault first",
                               "reason": "fault strength " + judge.strength(by_id[i])})
         for s in (answer or {}).get("suggestions", []):
             add_next(state, s.get("ids"), s.get("why"), s.get("confidence"), "planner")
@@ -383,7 +412,7 @@ def build(deps: Deps, out: Path):
         summary = {"text": answer.get("summary") or (
             f"(no AI) {len(judge.findings(ranked))} findings, {len(judge.root_causes(ranked))} root causes "
             f"from mild or targeted faults, resilience score {judge.resilience(entries)}/100."),
-            "ideas": [i for i in answer.get("ideas", []) if isinstance(i, str)]}
+            "ideas": [i for i in answer.get("ideas", []) if isinstance(i, str)], "by": answer.get("_by")}
         out.mkdir(parents=True, exist_ok=True)
         (out / "report.md").write_text(render({**state, "summary": summary}, hits, judged), encoding="utf-8")
         _write(out / "session.json", {**state, "summary": summary})
@@ -398,6 +427,7 @@ def build(deps: Deps, out: Path):
                 "stage": "done" if name == "report" else name, "pool": now.get("pool"), "budget": now.get("budget"),
                 "queue": now.get("queue", []), "dropped": now.get("dropped", []), "skipped": now.get("skipped", []),
                 "stopped": now.get("stopped"), "next": now.get("next", []), "plan_ai": now.get("plan_ai"),
+                "plan_by": now.get("plan_by"), "pid": os.getpid(),
                 "results": [{"id": r["id"], "item": r["item"], "tier": r["entry"]["tier"], "analysis": r["analysis"],
                              "effects": [e["what"] for e in r["entry"]["effects"]]} for r in now.get("results", [])],
             })
@@ -444,14 +474,20 @@ def render(state: dict, hits: int, judged: int) -> str:
     by = {r["id"]: r for r in results}
     entries = [r["entry"] for r in results]
     causes = sorted(judge.root_causes(ranked))
+
+    def models(answers) -> str:
+        names = sorted({short(a.get("_by")) for a in answers if a.get("_by")})
+        return ", ".join(names) or "rules (no AI)"
     lines = [
         "# Chaos session report", "",
         f"{datetime.now(timezone.utc):%Y-%m-%d %H:%M} UTC · {len(state['pool'])} faults picked · budget "
         f"{state['budget']} · {len(results)} run" + (f" · stopped: {state['stopped']}" if state.get("stopped") else ""),
         "",
         "Every number comes from `judge.py` rules over the measured effects. The text comes from the "
-        "models (planner and fixes: Groq gpt-oss-120b; analysts: OpenRouter nemotron; each falls back "
-        "to the other), with their own confidence. A person approved each run.", "",
+        f"models that answered: planner {short(state.get('plan_by')) if state.get('plan_by') else 'rules (no AI)'}, "
+        f"analysts {models(r['analysis'] for r in results)}, fixes {models(state['fixes'].values())}, "
+        f"summary {short(state['summary'].get('by')) if state['summary'].get('by') else 'rules (no AI)'}. "
+        "Each shows its own confidence. A person approved each run.", "",
         "## Summary", "", state["summary"]["text"], "",
         "## Scores", "",
         f"- **Resilience score** (krkn's formula, this pool): **{judge.resilience(entries)}/100**",
