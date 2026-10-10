@@ -17,6 +17,7 @@ import pandas as pd
 import streamlit as st
 from streamlit_sortables import sort_items
 
+import agent_flow
 import bank
 import chaos
 import judge
@@ -146,6 +147,8 @@ def pick():
         if st.button("Start session", type="primary", disabled=not pool or (not replay and not live_ok),
                      width="stretch"):
             launch(pool, min(int(budget), len(pool)), replay, auto, pairs)
+    st.header("How the agent works")
+    agent_flow.show(model={"planner": "gpt-oss-120b", "analyst": "gpt-oss-20b"})
     earlier = sessions()
     if earlier:
         with st.expander("Open an earlier session"):
@@ -270,6 +273,10 @@ def watch(out: Path):
     elif progress["stage"] == "run_next" and not pending:
         st.info("A fault is running, or the analyst is explaining the last one. Live runs take 6 to 7 "
                 "minutes each, including a cool-down so faults don't blur each other's baseline.")
+    if st.toggle("Show the flow", key=f"flow-toggle-{out.name}",
+                 help="The agent's steps as a diagram. The step running now is outlined."):
+        agent_flow.show(progress, pending,
+                        model={"planner": short(progress["plan_by"])} if progress.get("plan_by") else {})
     if st.session_state.get("mode") == "live":
         st.page_link("pages/1_Live_run.py", label="Watch the shop live: probe chart and per-service health")
     if results or queue:

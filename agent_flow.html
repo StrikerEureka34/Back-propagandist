@@ -1,0 +1,196 @@
+<!doctype html>
+<!-- The agent's flow (agent_flow.py fills DATA and THEME). Colours and fonts come from the Streamlit
+     theme at run time, so this file holds no colour values of its own. -->
+<html>
+<head>
+<meta charset="utf-8">
+<style id="fonts"></style>
+<style>
+  :root { --ease: cubic-bezier(.2, .7, .2, 1); }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font), sans-serif; }
+  .legend { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 12px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--line);
+          border-radius: 999px; font-size: 12px; background: var(--surface); cursor: default;
+          transition: border-color .2s var(--ease), transform .2s var(--ease); }
+  .chip:hover { border-color: var(--ink); transform: translateY(-1px); }
+  .chip i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+  .hint { margin-left: auto; font-size: 12px; opacity: .65; align-self: center; }
+  #frame { position: relative; width: 100%; overflow: hidden; }
+  #canvas { position: absolute; left: 0; top: 0; width: 1040px; height: 500px; transform-origin: 0 0; }
+  svg { position: absolute; inset: 0; overflow: visible; }
+  .edge { fill: none; stroke: var(--ink); stroke-opacity: .35; stroke-width: 1.4; stroke-linejoin: round;
+          transition: stroke-opacity .25s var(--ease), stroke .25s var(--ease), stroke-width .25s var(--ease); }
+  .edge.draw { stroke-dasharray: var(--len); stroke-dashoffset: var(--len); animation: draw .7s var(--ease) forwards; }
+  .edge.hot { stroke: var(--signal); stroke-opacity: 1; stroke-width: 2; }
+  .edge.dim { stroke-opacity: .12; }
+  .arrow { fill: var(--ink); fill-opacity: .45; }
+  .elabel { font-size: 11px; fill: var(--ink); opacity: 0; animation: fade .4s var(--ease) forwards; }
+  .elabel-bg { fill: var(--bg); opacity: 0; animation: fade .4s var(--ease) forwards; }
+  .packet { fill: var(--signal); }
+  .trail { fill: var(--signal); opacity: .25; }
+  .node { position: absolute; width: 200px; height: 78px; padding: 10px 12px 10px 16px; background: var(--surface);
+          border: 1px solid var(--line); border-radius: var(--radius); cursor: pointer; user-select: none;
+          opacity: 0; transform: translateY(8px);
+          animation: rise .5s var(--ease) forwards; animation-delay: var(--d);
+          transition: transform .2s var(--ease), border-color .2s var(--ease), opacity .25s var(--ease); }
+  .node::before { content: ""; position: absolute; left: -1px; top: -1px; bottom: -1px; width: 5px;
+                  background: var(--c); border-radius: var(--radius) 0 0 var(--radius); }
+  .node:hover { transform: translateY(-2px); border-color: var(--ink); }
+  .node.sel { border-color: var(--ink); }
+  .node.dim { opacity: .35 !important; }
+  .node.active { border-color: var(--signal); }
+  .node.active::after { content: ""; position: absolute; inset: -1px; border-radius: var(--radius);
+                        border: 2px solid var(--signal); animation: ripple 1.8s var(--ease) infinite; }
+  .node b { display: block; font-size: 13px; font-weight: 600; line-height: 1.25; }
+  .node small { display: block; margin-top: 4px; font-size: 11.5px; line-height: 1.3; opacity: .72; }
+  .node .now { position: absolute; right: 8px; top: 8px; font-size: 10px; letter-spacing: .04em; text-transform: uppercase;
+               color: var(--signal); }
+  #panel { margin-top: 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface);
+           padding: 14px 16px; min-height: 96px; transition: opacity .25s var(--ease), transform .25s var(--ease); }
+  #panel.swap { opacity: 0; transform: translateY(4px); }
+  #panel h4 { margin: 0 0 4px; font-family: var(--heading), serif; font-weight: 500; font-size: 19px; }
+  #panel .role { font-size: 12px; opacity: .7; margin-bottom: 8px; }
+  #panel p { margin: 6px 0; font-size: 14px; line-height: 1.45; }
+  #panel .guard { opacity: .75; font-size: 13px; }
+  #panel ul { margin: 8px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.45; }
+  @keyframes rise { to { opacity: 1; transform: none; } }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+  @keyframes fade { to { opacity: 1; } }
+  @keyframes ripple { 0% { opacity: .9; transform: scale(1); } 100% { opacity: 0; transform: scale(1.06); } }
+  @media (prefers-reduced-motion: reduce) {
+    .node, .edge.draw, .elabel, .elabel-bg { animation: none !important; opacity: 1; transform: none;
+                                             stroke-dashoffset: 0; }
+    .node.active::after, .packet, .trail { animation: none !important; display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="legend" id="legend"><span class="hint">Hover or click a step</span></div>
+<div id="frame"><div id="canvas"><svg id="svg"></svg></div></div>
+<div id="panel"></div>
+<script>
+const DATA = /*DATA*/null;
+const THEME = /*THEME*/null;
+const R = document.documentElement.style;
+R.setProperty("--bg", THEME.bg); R.setProperty("--surface", THEME.surface); R.setProperty("--ink", THEME.ink);
+R.setProperty("--line", THEME.line); R.setProperty("--signal", THEME.signal); R.setProperty("--radius", THEME.radius);
+R.setProperty("--font", THEME.font); R.setProperty("--heading", THEME.heading);
+document.getElementById("fonts").textContent = THEME.imports.map(u => `@import url('${u}');`).join("");
+
+const W = 200, H = 78, X = [20, 290, 560, 830], Y = [30, 210, 390];
+const ROLE_NAME = {person: "a person", code: "code", model: "a model", cluster: "the cluster"};
+const box = id => { const [c, r] = DATA.steps[id].at; return {x: X[c], y: Y[r]}; };
+const pt = (id, side) => { const b = box(id); return {
+  left: [b.x, b.y + H / 2], right: [b.x + W, b.y + H / 2], top: [b.x + W / 2, b.y], bottom: [b.x + W / 2, b.y + H]}[side]; };
+
+// Orthogonal routes between the sides each edge leaves and enters; the loop goes up between the rows.
+function route(e) {
+  const [ax, ay] = pt(e.from, e.out), [bx, by] = pt(e.to, e.in);
+  if (e.out === "top" && e.in === "bottom") { const mid = (ay + by) / 2;
+    return {d: `M${ax},${ay} V${mid + 8} Q${ax},${mid} ${ax + 8},${mid} H${bx - 8} Q${bx},${mid} ${bx},${mid - 8} V${by}`,
+            lx: (ax + bx) / 2, ly: mid}; }
+  if (ax === bx || ay === by) return {d: `M${ax},${ay} L${bx},${by}`, lx: (ax + bx) / 2, ly: (ay + by) / 2};
+  return {d: `M${ax},${ay} V${by} H${bx}`, lx: ax, ly: by};
+}
+
+const svg = document.getElementById("svg"), NS = "http://www.w3.org/2000/svg";
+const el = (tag, attrs, parent = svg) => { const n = document.createElementNS(NS, tag);
+  Object.entries(attrs).forEach(([k, v]) => n.setAttribute(k, v)); parent.appendChild(n); return n; };
+const defs = el("defs", {});
+const marker = el("marker", {id: "arrow", viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7,
+                             orient: "auto-start-reverse"}, defs);
+el("path", {d: "M0,0 L10,5 L0,10 z", class: "arrow"}, marker);
+
+const edges = DATA.edges.map((e, i) => {
+  const r = route(e);
+  const p = el("path", {d: r.d, class: "edge draw", "marker-end": "url(#arrow)"});
+  const len = p.getTotalLength(); p.style.setProperty("--len", len);
+  p.style.animationDelay = `${300 + i * 90}ms`;
+  if (e.label) {
+    const t = el("text", {x: r.lx, y: r.ly + 4, "text-anchor": "middle", class: "elabel"});
+    t.textContent = e.label; t.style.animationDelay = `${700 + i * 90}ms`;
+    const w = e.label.length * 5.6 + 12;
+    const bg = el("rect", {x: r.lx - w / 2, y: r.ly - 9, width: w, height: 18, rx: 9, class: "elabel-bg"});
+    svg.insertBefore(bg, t); bg.style.animationDelay = t.style.animationDelay;
+  }
+  return {e, p};
+});
+
+// A dot travels the run loop: queue, approve, fault, measure, analyst, and back to the queue.
+const loop = ["queue", "approve", "fault", "measure", "analyst"];
+const [q, a, f, m, an] = loop.map(box);
+const loopD = `M${q.x + W},${q.y + H / 2} H${a.x + W / 2} V${f.y + H / 2} H${an.x + W / 2} V${(Y[0] + H + Y[1]) / 2} H${q.x + W / 2} V${q.y + H / 2} Z`;
+const track = el("path", {d: loopD, fill: "none", stroke: "none", id: "loop"});
+[0, 0.12, 0.24].forEach((lag, i) => {
+  const c = el("circle", {r: i ? 2.5 : 4, class: i ? "trail" : "packet"});
+  const mo = el("animateMotion", {dur: "7s", repeatCount: "indefinite", begin: `${1.4 + lag}s`, rotate: "auto"}, c);
+  el("mpath", {href: "#loop"}, mo);
+});
+
+const canvas = document.getElementById("canvas");
+const nodes = {};
+Object.entries(DATA.steps).forEach(([id, s], i) => {
+  const b = box(id), n = document.createElement("div");
+  n.className = "node" + (id === DATA.active ? " active" : "");
+  n.style.left = b.x + "px"; n.style.top = b.y + "px";
+  n.style.setProperty("--c", THEME.roles[s.role]); n.style.setProperty("--d", `${i * 70}ms`);
+  n.innerHTML = `<b></b><small></small>${id === DATA.active ? '<span class="now">now</span>' : ""}`;
+  n.querySelector("b").textContent = s.model ? `${s.title} · ${s.model}` : s.title;
+  n.querySelector("small").textContent = s.sub;
+  n.onmouseenter = () => focus(id); n.onmouseleave = () => focus(null);
+  n.onclick = () => select(id);
+  canvas.appendChild(n); nodes[id] = n;
+});
+
+function focus(id, role) {
+  edges.forEach(({e, p}) => {
+    const on = id && (e.from === id || e.to === id);
+    p.classList.toggle("hot", !!on); p.classList.toggle("dim", !!(id || role) && !on);
+  });
+  Object.entries(nodes).forEach(([nid, n]) => {
+    const near = id ? nid === id || DATA.edges.some(e => (e.from === id && e.to === nid) || (e.to === id && e.from === nid))
+                    : role ? DATA.steps[nid].role === role : true;
+    n.classList.toggle("dim", !near);
+  });
+}
+
+Object.entries(ROLE_NAME).forEach(([role, name]) => {
+  const c = document.createElement("span");
+  c.className = "chip"; c.style.setProperty("--c", THEME.roles[role]);
+  c.innerHTML = "<i></i>"; c.append(name[0].toUpperCase() + name.slice(1));
+  c.onmouseenter = () => focus(null, role); c.onmouseleave = () => focus(null);
+  document.getElementById("legend").insertBefore(c, document.querySelector(".hint"));
+});
+
+const panel = document.getElementById("panel");
+function select(id) {
+  Object.values(nodes).forEach(n => n.classList.remove("sel"));
+  if (id) nodes[id].classList.add("sel");
+  panel.classList.add("swap");
+  setTimeout(() => { render(id); panel.classList.remove("swap"); }, 150);
+}
+function render(id) {
+  panel.textContent = "";
+  if (!id) { const p = document.createElement("p"); p.className = "guard";
+    p.textContent = "Click a step to see what it does, what guards it and, in a live session, what it just produced.";
+    panel.append(p); return; }
+  const s = DATA.steps[id], h = document.createElement("h4"), role = document.createElement("div");
+  h.textContent = s.model ? `${s.title} · ${s.model}` : s.title;
+  role.className = "role"; role.textContent = `Done by ${ROLE_NAME[s.role]}` + (id === DATA.active ? " · running now" : "");
+  const what = document.createElement("p"); what.textContent = s.what;
+  const guard = document.createElement("p"); guard.className = "guard"; guard.textContent = "Guards: " + s.guards;
+  panel.append(h, role, what, guard);
+  if ((DATA.live[id] || []).length) { const ul = document.createElement("ul");
+    DATA.live[id].forEach(line => { const li = document.createElement("li"); li.textContent = line; ul.append(li); });
+    panel.append(ul); }
+}
+
+const frame = document.getElementById("frame");
+function fit() { const k = Math.min(1, frame.clientWidth / 1040);
+  canvas.style.transform = `scale(${k})`; frame.style.height = `${500 * k}px`; }
+window.addEventListener("resize", fit); fit();
+select(DATA.active);
+</script>
+</body>
+</html>
