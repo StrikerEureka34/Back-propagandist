@@ -162,7 +162,9 @@ def live() -> Callable[[str], dict]:
             if not bank.wait_healthy(exp["probe_url"]):
                 return {"stopped": "shop still unhealthy 5 min after the last fault"}
             first, state["first"] = state["first"], False
-            if not first:
+            if first:
+                bank.wait_quiet()  # the session's first baseline mustn't hold a fault from just before it
+            else:
                 bank.pause(time.time() + bank.MIN_WINDOW_S)  # a clean baseline window after the last fault
             t0 = time.time()
             baseline = bank.window(t0 - (bank.BASELINE_S if first else bank.MIN_WINDOW_S), t0)

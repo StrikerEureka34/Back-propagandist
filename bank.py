@@ -148,6 +148,21 @@ def pause(until: float) -> None:
         time.sleep(min(1.0, left))
 
 
+def last_fault_end() -> float:
+    """When the most recent fault on this machine stopped: its event log's last write (0 if none)."""
+    return max((p.stat().st_mtime for p in chaos.RUNS.glob("*/events.jsonl")), default=0.0)
+
+
+def wait_quiet() -> None:
+    """Before a baseline: wait until the last fault is BASELINE_S in the past, so the "usual" window holds no
+    damage. A session started 3 min after a stopped hijack rated the same hijack low: its baseline already
+    had checkout failing half its calls (shipping-ship-errors, 2026-10-11)."""
+    until = last_fault_end() + BASELINE_S
+    if until > time.time():
+        print(f"waiting {until - time.time():.0f} s so the baseline holds no earlier fault", flush=True)
+        pause(until)
+
+
 def wait_healthy(url: str, streak: int = 5, timeout_s: int = 300) -> bool:
     """Before the next fault: the last one's damage may still be healing (catalog-kill took ~3 min)."""
     t0, ok_in_a_row = time.monotonic(), 0
@@ -296,8 +311,9 @@ if __name__ == "__main__":
         print(show())
     elif sys.argv[1:2] == ["run"] and len(sys.argv) > 2:
         ids = [e["id"] for e in chaos.load_experiments()] if sys.argv[2:] == ["all"] else sys.argv[2:]
-        # ponytail: one baseline per invocation; re-run soon after another fault and it is dirty
+        # ponytail: one baseline per invocation, taken once the last fault is quiet; later faults in the batch reuse it
         (chaos.RUNS / "STOP").unlink(missing_ok=True)  # a stop from an earlier run
+        wait_quiet()
         t0 = time.time()
         baseline = window(t0 - BASELINE_S, t0)
         for exp_id in ids:

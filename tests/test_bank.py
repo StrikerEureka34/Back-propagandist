@@ -161,3 +161,15 @@ def test_a_stop_ends_the_rating_wait_and_no_new_fault_starts(tmp_path, monkeypat
     assert time.time() - t0 < 2
     with pytest.raises(SystemExit, match="no new fault"):
         bank.measure("payment-kill", {})  # refused before chaos.run, which would clear the STOP
+
+
+def test_a_baseline_waits_until_the_last_fault_is_out_of_its_window(tmp_path, monkeypatch):
+    monkeypatch.setattr(chaos, "RUNS", tmp_path)
+    waited = []
+    monkeypatch.setattr(bank, "pause", lambda until: waited.append(until))
+    bank.wait_quiet()
+    assert waited == []  # no fault ever ran: nothing to wait for
+    (tmp_path / "shipping-ship-errors").mkdir()
+    (tmp_path / "shipping-ship-errors" / "events.jsonl").write_text("{}")  # a fault stopped just now
+    bank.wait_quiet()
+    assert waited and waited[0] - time.time() > bank.BASELINE_S - 5
