@@ -254,6 +254,11 @@ def _doc(name: str) -> str:
     return DOCS[name].read_text(encoding="utf-8") if DOCS[name].exists() else ""
 
 
+def _recovered(entry: dict) -> str:
+    text = bank.recovered_text(entry)
+    return "no lasting damage" if text == "-" else text
+
+
 def _cell(text) -> str:
     return " ".join(str(text if text is not None else "-").split()).replace("|", "/")
 
@@ -340,7 +345,9 @@ def build(deps: Deps, out: Path):
                   f"Hypothesis before the run: {item.get('hypothesis')}\n"
                   f"Measured tier (rules, final): {entry['tier']}; root-cause tag: {judge.cause(entry)}\n"
                   f"SLO points {passed}/{total}; broken: {', '.join(failed) or 'none'}\n"
-                  f"Recovery: {entry.get('recovery_s')} s; shop probe: {entry.get('shop')}\n"
+                  # recovery_s only times the shop page, 0.0 s for most faults; the metrics say how long damage lasted
+                  f"Damage gone after the fault: {_recovered(entry)}; shop page back after {entry.get('recovery_s')} s; "
+                  f"shop probe: {entry.get('shop')}\n"
                   "Effects:\n" + ("\n".join(f"- {e['what']}" for e in entry["effects"]) or "- no detectable effect")
                   + f"\n\nService facts:\n{_doc('service-facts')}\n\n"
                   f"Evidence you may cite: bank.json:{key}, service-facts.\n"

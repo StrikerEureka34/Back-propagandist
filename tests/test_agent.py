@@ -153,3 +153,17 @@ def test_auto_approve_only_in_replay():
     assert agent.approver(auto=True, replay=True)({"ids": ["x"]}) is True
     with pytest.raises(SystemExit):
         agent.approver(auto=True, replay=False)
+
+
+def test_analyst_hears_how_long_the_damage_lasted_not_just_the_shop_page(tmp_path):
+    prompts = []
+
+    def ask(role, system, prompt, need=None):
+        prompts.append(prompt) if need == "what_happened" else None
+        return None
+    bank = {"blast-loss": {**BANK["blast-loss"], "recovery_s": 0.0, "recovered_s": 170, "recovery_checked_s": 900}}
+    deps = agent.Deps(ask=ask, run=agent.replay(bank), approve=lambda item: True,
+                      exps=[{"id": "blast-loss", "scenario": "node-network-chaos", "params": {}, "target": "node:chaos-worker"}],
+                      graph={"nodes": {}, "edges": []})
+    agent.session(["blast-loss"], 1, deps, tmp_path)
+    assert "Damage gone after the fault: within 3 min" in prompts[0]
