@@ -48,6 +48,7 @@ BRIEF = " Keep every text field under 25 words."
 CONFIDENCE = ("confidence is your own probability, 0 to 1, that you are right; judge it from the "
               "evidence, don't copy the example's null.")
 TIERS = ("high", "medium", "low")
+MAX_FOLLOW_UPS = 2  # analyst follow-ups run this session; the planner's plan still mostly runs
 
 PLAN_SYSTEM = (
     "Plan a chaos-engineering session on an online shop. Rank every candidate fault by expected "
@@ -317,6 +318,31 @@ def build(deps: Deps, out: Path):
         if ids and known(ids) and key not in done:
             state.setdefault("next", []).append({"ids": ids, "why": why, "confidence": confidence, "source": source})
 
+    def chase(state: dict, rest: list[dict], follow: dict, current: dict, entry: dict) -> tuple[list[dict], str | None]:
+        """The analyst's follow-up joins this session's queue right after the current run, when the
+        rules allow it. Returns the queue, and why not (then it waits for next session, as before)."""
+        ids = [i for i in (follow.get("ids") or []) if isinstance(i, str)]
+        key, after = "+".join(ids), "+".join(current["ids"])
+        chased = sum(str(q.get("source", "")).startswith("analyst")  # queued, finished, and the one just run
+                     for q in [*rest, *(r["item"] for r in state["results"]), current])
+        why_not = ("no follow-up" if not ids else
+                   "not a known fault" if not known(ids) else
+                   "already ran" if key in {r["id"] for r in state["results"]} | {after} else
+                   "a pair, and pairs are off" if len(ids) == 2 and not deps.pairs else
+                   "a broad fault: follow-ups stay mild or targeted"
+                   if any(judge.strength(by_id[i]) == "broad" for i in ids) else
+                   "the run broke nothing, so there is no trail to follow" if not entry["effects"] else
+                   f"{MAX_FOLLOW_UPS} follow-ups already this session" if chased >= MAX_FOLLOW_UPS else None)
+        if why_not:
+            return rest, why_not
+        queued = next((q for q in rest if "+".join(q["ids"]) == key), None)  # planned later: move it up
+        item = {**(queued or {"predicted": None, "confidence": None}), "ids": ids,
+                "hypothesis": follow.get("why") or (queued or {}).get("hypothesis"),
+                "reason": f"follow-up to {after}" + ("" if set(ids) <= set(state["pool"]) else
+                                                      ", outside the pool you picked: you decide"),
+                "source": f"analyst after {after}"}
+        return [item, *(q for q in rest if q is not queued)], None
+
     def plan(state: dict) -> dict:
         pool = [i for i in state["pool"] if i in by_id]
         pairs, rejected = judge.candidate_pairs(pool, deps.exps, deps.graph)
@@ -417,7 +443,12 @@ def build(deps: Deps, out: Path):
         state = {**state, "queue": rest}
         follow = analysis.get("follow_up")
         follow = follow if isinstance(follow, dict) else {}
-        add_next(state, follow.get("ids"), follow.get("why"), analysis.get("confidence"), f"analyst after {key}")
+        rest, why_not = chase(state, rest, follow, item, entry)
+        if follow.get("ids"):
+            analysis["follow_up_status"] = why_not or "runs next, this session"
+            if why_not:
+                add_next(state, follow.get("ids"), follow.get("why"), analysis.get("confidence"),
+                         f"analyst after {key} ({why_not})")
         return {"queue": rest, "next": state.get("next", []),
                 "results": state["results"] + [{"id": key, "item": item, "entry": entry, "analysis": analysis}]}
 

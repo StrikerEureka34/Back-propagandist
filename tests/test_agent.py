@@ -42,6 +42,7 @@ PLAN = {"queue": [
 ANALYST = {"what_happened": "checkout failed", "why": "no retries", "hypothesis_held": True, "tier": "low",
            "evidence": ["bank.json:blast-loss", "runs/does-not-exist.json", "service-facts"], "confidence": 0.7,
            "follow_up": {"ids": ["blast-latency"], "why": "same path, slower instead of lossy"}}
+QUIET = {**ANALYST, "follow_up": None}  # an analyst with no lead: the planner's order runs as planned
 FIXER = {"fix": "timeouts and retries", "change": "per-call deadlines in checkout", "verify_with": "blast-loss",
          "catalog_match": True, "confidence": 0.6}
 FINAL = {"summary": "Checkout is the weak spot.", "next_tests": [{"ids": ["quote-garbage"], "why": "wrong answers"}],
@@ -58,7 +59,7 @@ def run_session(ask, tmp_path, budget=3, pool=POOL):
 
 
 def test_replay_session_ranks_by_leverage_and_validates_the_llm(tmp_path):
-    ask = fake_ask({"plan": PLAN, "worker": ANALYST, "fixer": FIXER, "final": FINAL})
+    ask = fake_ask({"plan": PLAN, "worker": QUIET, "fixer": FIXER, "final": FINAL})
     state = run_session( ask, tmp_path, budget=3)
     report = (tmp_path / "report.md").read_text()
     ran = [r["id"] for r in state["results"]]
@@ -118,7 +119,7 @@ def test_a_short_rate_limit_is_waited_out_not_handed_to_the_fallback(tmp_path, m
 
 def test_a_planner_that_ranks_one_fault_still_runs_the_budget(tmp_path):
     one = {"queue": [{"ids": ["cart-wipe"], "hypothesis": "carts live in memory", "predicted": "high", "confidence": 0.8}]}
-    state = run_session(fake_ask({"plan": one, "worker": ANALYST, "fixer": FIXER, "final": FINAL}), tmp_path, budget=3)
+    state = run_session(fake_ask({"plan": one, "worker": QUIET, "fixer": FIXER, "final": FINAL}), tmp_path, budget=3)
     ran = [r["id"] for r in state["results"]]
     assert ran[0] == "cart-wipe" and len(ran) == 3  # the planner's pick first, then rules fill the budget
     assert all(r["item"].get("ranked_by") == "rules" for r in state["results"][1:])
@@ -280,3 +281,40 @@ def test_a_person_can_reorder_the_queue_and_a_waiting_card_yields(tmp_path):
     threading.Thread(target=reorder, daemon=True).start()
     assert approve({"ids": ["blast-loss"]}) == agent.REORDER
     assert not (tmp_path / "pending.json").exists()
+
+
+def test_the_analysts_lead_runs_next_this_session_within_the_rules(tmp_path):
+    state = run_session(fake_ask({"plan": PLAN, "worker": ANALYST, "fixer": FIXER, "final": FINAL}), tmp_path, budget=3)
+    ran = [r["id"] for r in state["results"]]
+    assert ran == ["blast-loss", "blast-latency", "cart-wipe"]  # blast-loss's lead (blast-latency) ran second
+    lead = state["results"][1]["item"]
+    assert lead["source"] == "analyst after blast-loss" and lead["hypothesis"].startswith("same path")
+    assert "outside the pool you picked" in lead["reason"]  # blast-latency wasn't in POOL: the card says so
+    assert state["results"][0]["analysis"]["follow_up_status"] == "runs next, this session"
+    # blast-latency already ran, so later leads to it wait for next session instead of repeating
+    assert "already ran" in state["results"][1]["analysis"]["follow_up_status"]
+
+
+@pytest.mark.parametrize("lead,why", [({"ids": ["traffic-spike"]}, "broad"), ({"ids": ["made-up"]}, "not a known"),
+                                      ({"ids": ["blast-loss", "cart-wipe"]}, "pairs are off")])
+def test_a_lead_outside_the_rules_waits_for_next_session(tmp_path, lead, why):
+    bank = {**BANK, "traffic-spike": {**BANK["blast-loss"], "scenario": "http-load", "params": {}}}
+    deps = agent.Deps(ask=fake_ask({"plan": PLAN, "worker": {**ANALYST, "follow_up": {**lead, "why": "x"}},
+                                    "fixer": FIXER, "final": FINAL}), run=agent.replay(bank), approve=lambda item: True,
+                      exps=[{"id": i, "scenario": e["scenario"], "params": e["params"],
+                             "target": "node:chaos-worker" if e["scenario"].startswith("node") else f"opentelemetry.io/name={i}"}
+                            for i, e in bank.items()], graph={"nodes": {}, "edges": []})
+    state = agent.session(POOL, 3, deps, tmp_path)
+    assert [r["id"] for r in state["results"]] == ["blast-loss", "cart-wipe", "payment-kill"]
+    assert why in state["results"][0]["analysis"]["follow_up_status"]
+
+
+def test_at_most_two_leads_per_session(tmp_path):
+    leads = iter(["blast-latency", "catalog-kill", "quote-garbage", "blast-memory"])
+
+    def ask(role, system, prompt, need=None):
+        if need == "what_happened":
+            return {**ANALYST, "follow_up": {"ids": [next(leads, "blast-memory")], "why": "lead"}}
+        return fake_ask({"plan": PLAN, "fixer": FIXER, "final": FINAL})(role, system, prompt, need)
+    state = run_session(ask, tmp_path, budget=5)
+    assert sum(str(r["item"].get("source", "")).startswith("analyst") for r in state["results"]) == 2
