@@ -1,0 +1,15 @@
+# Fix for catalog-kill (#19), with replicas: 2 in k8s/otel-values.yaml. The chart has no lifecycle
+# field, so apply after any helm install/upgrade:
+#   kubectl patch deployment product-catalog -n otel-demo --patch-file k8s/product-catalog-patch.yaml
+# Why: on delete, the Service kept routing new connections to the dying pod's IP for a moment; the
+# frontend's connect to that IP was black-holed and hung ~127 s (tcp_syn_retries 6, no gRPC timeout).
+# A preStop sleep keeps the old pod up and answering until routing has moved to the other replica.
+spec:
+  template:
+    spec:
+      containers:
+        - name: product-catalog
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: 10

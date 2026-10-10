@@ -8,6 +8,9 @@ components:
   frontend: {schedulingRules: {nodeSelector: {chaos-zone: steady}}}
   load-generator: {schedulingRules: {nodeSelector: {chaos-zone: steady}}}
   flagd: {schedulingRules: {nodeSelector: {chaos-zone: steady}}}
+  # Fix for catalog-kill (#19): a second replica, plus a preStop sleep from k8s/product-catalog-patch.yaml
+  # (the chart has no lifecycle field). Re-apply that patch after any helm install/upgrade.
+  product-catalog: {replicas: 2}
   telemetry-docs: {schedulingRules: {nodeSelector: {chaos-zone: steady}}}
   opamp-server: {schedulingRules: {nodeSelector: {chaos-zone: steady}}}
   frontend-proxy:
