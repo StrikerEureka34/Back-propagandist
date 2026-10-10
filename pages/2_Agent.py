@@ -65,13 +65,15 @@ def sessions() -> list[Path]:
     return sorted((p.parent for p in RUNS.glob("session-*/progress.json")), reverse=True)
 
 
-def launch(pool: list[str], budget: int, replay: bool, auto: bool):
+def launch(pool: list[str], budget: int, replay: bool, auto: bool, pairs: bool):
     out = RUNS / f"session-{datetime.now():%Y%m%d-%H%M%S}"
     out.mkdir(parents=True, exist_ok=True)
     cmd = [sys.executable, "-u", str(ROOT / "agent.py"), "--pool", ",".join(pool), "--budget", str(budget),
            "--ui", "--out", str(out)]
     if replay:
         cmd += ["--replay", str(bank.BANK)] + (["--auto-approve"] if auto else [])
+    if pairs:
+        cmd += ["--pairs"]
     log = open(out / "agent.log", "w", encoding="utf-8")
     st.session_state["proc"] = subprocess.Popen(
         cmd, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, env={**os.environ, "PYTHONUTF8": "1"},
@@ -113,6 +115,9 @@ def pick():
                                           "minutes each). What doesn't fit becomes a suggestion for next time.")
             auto = st.checkbox("Approve every run automatically", disabled=not replay,
                                help="Replay only: nothing is injected. Live runs always wait for a person.")
+            pairs = st.checkbox("Also test fault pairs", help="Also tries two faults at once, under one kill switch. "
+                                "The planner picks only from pairs the safety rules allow. You still approve each "
+                                "one. Replay skips pairs the bank hasn't rated.")
             controls = [f"{e['control']['expected']} expected, {'pass' if e['control']['pass'] else 'FAIL'}"
                         for e in rated.values() if "control" in e]
             st.caption(f"Calibration: {len(controls)} known-answer controls in the bank, "
@@ -139,7 +144,7 @@ def pick():
     with right:
         if st.button("Start session", type="primary", disabled=not pool or (not replay and not live_ok),
                      width="stretch"):
-            launch(pool, min(int(budget), len(pool)), replay, auto)
+            launch(pool, min(int(budget), len(pool)), replay, auto, pairs)
     earlier = sessions()
     if earlier:
         with st.expander("Open an earlier session"):

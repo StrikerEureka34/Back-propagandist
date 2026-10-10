@@ -213,7 +213,7 @@ class Deps:
     exps: list[dict]
     graph: dict
     prior: dict = field(default_factory=dict)  # tiers from earlier sessions; {} = plan blind
-    pairs: bool = False  # run pairs (needs the combo runner, #20); otherwise they become suggestions
+    pairs: bool = False  # run pairs (chaos.py run a+b); otherwise they become suggestions
 
 
 class Session(TypedDict, total=False):
@@ -308,7 +308,7 @@ def build(deps: Deps, out: Path):
             single = len(ids) == 1 and ids[0] in pool
             pair = len(ids) == 2 and set(ids) <= set(pool) and any(sorted(ids) == sorted(p["ids"]) for p in pairs)
             if pair and not deps.pairs:
-                add_next(state, ids, "pair: needs the combo runner (#20)", item.get("confidence"), "planner")
+                add_next(state, ids, "pair: run with --pairs", item.get("confidence"), "planner")
             elif single or pair:
                 queue.append({**item, "ids": ids,
                               "predicted": item.get("predicted") if item.get("predicted") in TIERS else None})
@@ -549,7 +549,7 @@ def main(argv: list[str] | None = None):
     p.add_argument("--budget", type=int, default=8, help="max fault runs this session (default 8)")
     p.add_argument("--replay", metavar="BANK_JSON", help="replay recorded ratings instead of injecting")
     p.add_argument("--auto-approve", action="store_true", help="only with --replay")
-    p.add_argument("--pairs", action="store_true", help="run code-checked pairs (needs the combo runner, #20)")
+    p.add_argument("--pairs", action="store_true", help="also run code-checked pairs, a+b under one kill switch")
     p.add_argument("--out", help="output dir (default runs/session-<time>)")
     p.add_argument("--ui", action="store_true", help="approvals come from the console (files in --out)")
     args = p.parse_args(argv)
