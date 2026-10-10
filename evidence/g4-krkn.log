@@ -1,0 +1,178 @@
+
+
+container runtime: Docker
+
+Environment Value        Value                                   
+RESILIENCY_ENABLED_MODE  disabled                                
+TOTAL_CHAOS_DURATION     60                                      
+EXECUTION                parallel                                
+EGRESS                   true                                    
+PROTOCOLS                tcp                                     
+NAMESPACE                otel-demo                               
+INGRESS                  false                                   
+POD_SELECTOR             opentelemetry.io/nam...(17 bytes more)  
+INSTANCE_COUNT           1                                       
+PORTS                    5432                                    
+IMAGE                    quay.io/krkn-chaos/k...(45 bytes more)  
+
+✅  signature verified: "containers.krkn-chaos.dev/krkn-chaos/krkn-hub-multiarch:pod-network-filter" is signed by a trusted ecosystem key.
+    running pinned digest containers.krkn-chaos.dev/krkn-chaos/krkn-hub-multiarch@sha256:58204415586f9857c1cc40a543cb5124637dbb1d2bc8fac78d8da6117c5f313e
+[1m10-10-2026T07:38:37 Checking if OpenShift client is installed[0m
+/usr/sbin/oc
+[1m10-10-2026T07:38:37 Checking if kubernetes client is installed[0m
+/usr/sbin/kubectl
+2026-10-10 07:38:38,431 [[37mINFO[0m] Starting krkn[0m
+2026-10-10 07:38:38,441 [[37mINFO[0m] Using secure default rollback directory: /home/krkn/.krkn/rollback[0m
+2026-10-10 07:38:38,442 [[37mINFO[0m] Initializing client to talk to the Kubernetes cluster[0m
+2026-10-10 07:38:38,442 [[37mINFO[0m] Generated a uuid for the run: ee16a6a7-9a3b-46f5-803d-a0d93b37fb51[0m
+2026-10-10 07:38:38,464 [[37mINFO[0m] Detected cluster platform: kubernetes[0m
+2026-10-10 07:38:38,464 [[37mINFO[0m] Fetching cluster info[0m
+2026-10-10 07:38:38,464 [[37mINFO[0m] Cluster version CRD not detected, skipping[0m
+2026-10-10 07:38:38,464 [[33mWARNING[0m] Prometheus URL not provided; disabling resiliency score features.[0m
+2026-10-10 07:38:38,465 [[37mINFO[0m] Server URL: https://127.0.0.1:41761[0m
+2026-10-10 07:38:38,465 [[37mINFO[0m] Daemon mode not enabled, will run through 1 iterations
+[0m
+2026-10-10 07:38:40,499 [[37mINFO[0m] 📣 `ScenarioPluginFactory`: 21 scenario types loaded (0 failed)[0m
+2026-10-10 07:38:40,499 [[37mINFO[0m] 📣 `HealthCheckFactory`: 9 health check plugins loaded (0 failed)[0m
+2026-10-10 07:38:40,499 [[37mINFO[0m] Scenario plugins for this run:[0m
+2026-10-10 07:38:40,499 [[37mINFO[0m]   ✅ network_chaos_ng_scenarios ➡️ `NetworkChaosNgScenarioPlugin`[0m
+2026-10-10 07:38:40,500 [[37mINFO[0m] Started continuous health check plugin 'virt_health_check' reading from config key 'kubevirt_checks'[0m
+2026-10-10 07:38:40,500 [[37mINFO[0m] Executing scenarios for iteration 0[0m
+2026-10-10 07:38:40,503 [[37mINFO[0m] Signal handlers registered globally[0m
+2026-10-10 07:38:40,503 [[37mINFO[0m] Running NetworkChaosNgScenarioPlugin: ['network_chaos_ng_scenarios'] -> scenarios/kube/network-filter.yml[0m
+2026-10-10 07:38:40,505 [[37mINFO[0m] running network_chaos scenario: pod_network_filter[0m
+2026-10-10 07:38:40,537 [[37mINFO[0m] [pod-filter-dobfj]: creating workload to filter pod  networkports 5432, ingress:False, egress:True[0m
+2026-10-10 07:38:40,541 [[37mINFO[0m] Verifying signature for image 'quay.io/krkn-chaos/krkn-hub-multiarch:workload-krkn-network-chaos' before creating pod[0m
+2026-10-10 07:38:43,830 [[37mINFO[0m] Image signature verified for 'quay.io/krkn-chaos/krkn-hub-multiarch:workload-krkn-network-chaos' before creating pod[0m
+2026-10-10 07:39:15,288 [[37mINFO[0m] [product-catalog-56d75d89f9-mwxs8]: detected default interface eth0[0m
+2026-10-10 07:39:15,306 [[37mINFO[0m] [pod-filter-dobfj]: detected network interfaces: eth0[0m
+2026-10-10 07:39:15,462 [[37mINFO[0m] [pod-filter-dobfj]: targeting container ad8113ebb33fe5cf1475b09ba7fd71a8bd92ec14e49806065a9b9bad59e7a77f[0m
+2026-10-10 07:39:16,162 [[37mINFO[0m] [pod-filter-dobfj]: resolved pids ['21761'] in node chaos-worker for pod product-catalog-56d75d89f9-mwxs8[0m
+2026-10-10 07:39:16,162 [[37mINFO[0m] [product-catalog-56d75d89f9-mwxs8]: applying iptables OUTPUT rule: nsenter --target 21761 --net -- iptables -I OUTPUT 1 -p tcp --dport 5432 -m state --state NEW,RELATED,ESTABLISHED -j DROP[0m
+2026-10-10 07:39:16,250 [[37mINFO[0m] [pod-filter-dobfj]: waiting 60 seconds before removing the iptables rules[0m
+2026-10-10 07:40:16,251 [[37mINFO[0m] [pod-filter-dobfj]: removing iptables rules[0m
+2026-10-10 07:40:17,372 [[37mINFO[0m] waiting 60s for cluster to stabilize before collecting metrics[0m
+2026-10-10 07:41:17,907 [[37mINFO[0m] Find cluster events in file /tmp/events.json[0m
+2026-10-10 07:41:17,908 [[37mINFO[0m] telemetry disabled, skipping cluster metadata collection[0m
+2026-10-10 07:41:17,910 [[37mINFO[0m] Chaos data:
+{
+    "telemetry": {
+        "scenarios": [
+            {
+                "start_timestamp": 1791617920,
+                "end_timestamp": 1791618077,
+                "scenario": "scenarios/kube/network-filter.yml",
+                "scenario_type": "network_chaos_ng_scenarios",
+                "exit_status": 0,
+                "parameters_base64": "",
+                "parameters": [
+                    {
+                        "egress": true,
+                        "execution": "parallel",
+                        "id": "pod_network_filter",
+                        "image": "quay.io/krkn-chaos/krkn-hub-multiarch:workload-krkn-network-chaos",
+                        "ingress": false,
+                        "instance_count": 1,
+                        "interfaces": [],
+                        "label_selector": "opentelemetry.io/name=product-catalog",
+                        "namespace": "otel-demo",
+                        "ports": [
+                            5432
+                        ],
+                        "protocols": [
+                            "tcp"
+                        ],
+                        "service_account": "",
+                        "taints": [],
+                        "target": "",
+                        "test_duration": 60,
+                        "wait_duration": 0
+                    }
+                ],
+                "affected_pods": {
+                    "recovered": [],
+                    "unrecovered": [],
+                    "error": null
+                },
+                "affected_vmis": {
+                    "recovered": [],
+                    "unrecovered": [],
+                    "error": null
+                },
+                "affected_nodes": [],
+                "cluster_events": []
+            }
+        ],
+        "node_summary_infos": [],
+        "node_taints": [],
+        "kubernetes_objects_count": {},
+        "network_plugins": [
+            "Unknown"
+        ],
+        "timestamp": "2026-10-10T07:38:38Z",
+        "health_checks": null,
+        "virt_checks": null,
+        "object_state_checks": null,
+        "error_logs": [],
+        "overall_resiliency_report": {
+            "scenarios": {},
+            "resiliency_score": 0,
+            "passed_slos": 0,
+            "total_slos": 0
+        },
+        "alerts": [],
+        "total_node_count": null,
+        "cloud_infrastructure": null,
+        "cloud_type": null,
+        "cluster_version": null,
+        "major_version": null,
+        "run_uuid": "ee16a6a7-9a3b-46f5-803d-a0d93b37fb51",
+        "job_status": null,
+        "build_url": null,
+        "tag": "",
+        "fips_enabled": false,
+        "etcd_encryption_enabled": false,
+        "ipsec_enabled": false
+    },
+    "critical_alerts": null
+}[0m
+2026-10-10 07:41:17,910 [[37mINFO[0m] 
+================================================================================
+KRKN RUN SUMMARY
+================================================================================
+Run UUID : ee16a6a7-9a3b-46f5-803d-a0d93b37fb51
+Status   : FAIL
+Cluster  : None (None, None)
+Window   : 2026-10-10 07:38:40 – 07:41:17
+Nodes    : None
+Network  : Unknown
+TARGETS
+  [1] Scenario  : scenarios/kube/network-filter.yml (network_chaos_ng_scenarios)
+  Label Selector : opentelemetry.io/name=product-catalog
+  Namespace      : otel-demo
+KEY METRICS
+  [1] Scenario: scenarios/kube/network-filter.yml
+    Exit Status           : PASS (0)
+ALERTS & SLOs
+  SLOs Evaluated  : 0
+  SLOs Passed     : 0 / 0
+  SLOs Failed     : 0
+  Critical Alerts : None
+RESILIENCY SCORE
+  Overall Score                : 0 / 100
+================================================================================[0m
+2026-10-10 07:41:17,922 [[37mINFO[0m] PDF report generated: /home/krkn/kraken/kraken.report.pdf[0m
+2026-10-10 07:41:17,923 [[37mINFO[0m] HTML report generated: /home/krkn/kraken/kraken.report.html[0m
+2026-10-10 07:41:17,923 [[37mINFO[0m] api_url not set, skipping telemetry upload.[0m
+2026-10-10 07:41:17,923 [[37mINFO[0m] Kraken UUID for the run: ee16a6a7-9a3b-46f5-803d-a0d93b37fb51. Report generated at kraken.report.[0m
+2026-10-10 07:41:17,923 [[37mINFO[0m] Successfully finished running Kraken, exiting[0m
+ _         _          
+| | ___ __| | ___ __  
+| |/ / '__| |/ / '_ \ 
+|   <| |  |   <| | | |
+|_|\_\_|  |_|\_\_| |_|
+                      
+
+DEBUG: Attempting to parse resiliency report from 8141 bytes of logs
+Failed to parse resiliency report: resiliency report marker not found in logs
+pod-network-filter ran for 2m59.672635245s

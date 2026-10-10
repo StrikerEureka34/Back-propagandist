@@ -1,0 +1,4 @@
+traces_span_metrics_calls_total
+traces_span_metrics_duration_milliseconds_bucket
+traces_span_metrics_duration_milliseconds_count
+traces_span_metrics_duration_milliseconds_sum
