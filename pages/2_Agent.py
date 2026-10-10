@@ -193,6 +193,10 @@ def analyst_notes(results: list[dict], newest_first: bool = False):
         with st.expander(f"{r['id']}: measured {tier}"):
             st.write(a.get("what_happened") or "-")
             st.write(f"Why: {a.get('why') or '-'}")
+            lead = a.get("follow_up") if isinstance(a.get("follow_up"), dict) else {}
+            if lead.get("ids"):
+                st.write(f"Follow-up suggested: {'+'.join(map(str, lead['ids']))} ({lead.get('why') or 'no reason'}). "
+                         f"{a.get('follow_up_status') or ''}")
             if a.get("flag"):
                 st.warning(a["flag"])
             check = a.get("check")

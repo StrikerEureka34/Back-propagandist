@@ -333,3 +333,16 @@ def test_progress_says_running_while_the_first_run_is_going(tmp_path):
                             for i, e in BANK.items()], graph={"nodes": {}, "edges": []})
     agent.session(POOL, 2, deps, tmp_path)
     assert seen[0] == "run_next"  # it said "plan" until the first run finished
+
+
+def test_the_analyst_is_told_which_faults_it_may_name(tmp_path):
+    prompts = []
+
+    def ask(role, system, prompt, need=None):
+        prompts.append(prompt) if need == "what_happened" else None
+        return fake_ask({"plan": PLAN, "worker": QUIET, "fixer": FIXER, "final": FINAL})(role, system, prompt, need)
+    run_session(ask, tmp_path, budget=2)
+    first = prompts[0]
+    assert "Faults you may name as follow_up" in first and "- blast-latency:" in first
+    assert "- blast-loss:" not in first  # the run being explained isn't its own follow-up
+    assert "- blast-loss:" not in prompts[1]  # nor one that already ran

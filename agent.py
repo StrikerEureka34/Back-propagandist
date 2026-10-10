@@ -428,8 +428,13 @@ def build(deps: Deps, out: Path):
                   "Effects:\n" + ("\n".join(f"- {e['what']}" for e in entry["effects"]) or "- no detectable effect")
                   + f"\n\nService facts:\n{_doc('service-facts')}\n\n"
                   f"Evidence you may cite: bank.json:{key}, service-facts.\n"
+                  # without the list the analyst invented ids ("currency-fallback") and no follow-up ever ran
+                  "Faults you may name as follow_up (these exact ids only):\n" + "\n".join(
+                      f"- {i}: {e.get('note') or e['scenario']}" for i, e in by_id.items()
+                      if "expect" not in e and e["scenario"] != "flagd" and judge.strength(e) != "broad"
+                      and i != key and i not in {r["id"] for r in state["results"]}) + "\n"
                   "Answer with one JSON object shaped like this example. follow_up is null, or one "
-                  'fault id (or two for a pair) from the bank worth testing next, as {"ids": [...], "why": "..."}:\n'
+                  'fault id (or two for a pair) from that list worth testing next, as {"ids": [...], "why": "..."}:\n'
                   '{"what_happened": "...", "why": "...", "hypothesis_held": true, '
                   f'"evidence": ["bank.json:{key}", "service-facts"], "follow_up": null, "confidence": null}}')
         answer = deps.ask("worker", ANALYST_SYSTEM, prompt, "what_happened")
