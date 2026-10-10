@@ -18,7 +18,7 @@ one failure injected · auto-stop tested · demo with impact visible
 map `depmap.py` → AI plan `plan.py` (fixed krkn menu, human approves) → break `chaos.py`
 (krknctl + kill switch) → observe `observe.py` → report (Day 2). krkn does every break.
 
-## Experiments (`experiments.yaml`, the contract between lanes)
+## Experiments (`experiments.toml`, the contract between lanes; stdlib `tomllib`, no new dep)
 | id | krkn scenario | shows |
 |---|---|---|
 | cart-wipe | pod-scenarios, valkey-cart | every cart lost (no volume) |
@@ -30,7 +30,7 @@ map `depmap.py` → AI plan `plan.py` (fixed krkn menu, human approves) → brea
 | Issue | Piece | Files | Est | Parallel |
 |---|---|---|---|---|
 | #4 | Dependency map + risk flags | `depmap.py`, `tests/test_depmap.py`, `tests/fixtures/` | 45m | B (StrikerEureka34) |
-| #5 | krkn runner + kill switch | `chaos.py`, `experiments.yaml`, `tests/test_chaos_abort.py` | 1.5h | A (TanmayBnz, Arch box) |
+| #5 | krkn runner + kill switch | `chaos.py`, `experiments.toml`, `tests/test_chaos_abort.py` | 1.5h | A (TanmayBnz, Arch box) |
 | #6 | Baseline + Prometheus metrics | `observe.py`, `tests/test_observe.py` | 45m | B, after #4 |
 | #7 | AI planner (OpenRouter `llm()`) | `plan.py`, `llm.py`, `.env.example`, `tests/test_plan.py` | 30m | B, after #4; drop first if behind at 14:45 |
 Polish #12 (15:30-16:30) · Pitch #13 (16:30-17:00)
