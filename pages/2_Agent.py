@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pandas as pd
 import streamlit as st
+from streamlit_sortables import sort_items
 
 import bank
 import chaos
@@ -277,26 +278,44 @@ def watch(out: Path):
     analyst_notes(results, newest_first=True)
 
 
+def drag_style(left: int) -> str:
+    """The drag list in the theme's colours and font, read from .streamlit/config.toml (no hex values
+    here). Items are numbered, and the ones past the budget are dashed and marked."""
+    o = st.get_option
+    font, _, url = str(o("theme.font")).partition(":")  # "'IBM Plex Sans':https://fonts..." (the iframe has no page fonts)
+    return (f"@import url('{url}');" if url else "") + (
+        f".sortable-component {{background: {o('theme.backgroundColor')}; border: none; padding: 0;}}"
+        f".sortable-container-body {{background: {o('theme.backgroundColor')}; padding: 0; counter-reset: n;}}"
+        f".sortable-item, .sortable-item:hover {{background: {o('theme.secondaryBackgroundColor')}; "
+        f"color: {o('theme.textColor')}; border: 1px solid {o('theme.borderColor')}; "
+        f"border-radius: {o('theme.baseRadius')}; font-family: {font or 'sans-serif'}, sans-serif; font-size: 14px; "
+        "text-align: left; margin: 0 0 4px; padding: 8px 12px;}"
+        f".sortable-item:hover {{border-color: {o('theme.textColor')};}}"
+        f".sortable-item:focus-visible {{outline: 2px solid {o('theme.primaryColor')}; outline-offset: 2px;}}"
+        ".sortable-item::before {counter-increment: n; content: counter(n) \".\\00a0\\00a0\";}"
+        f".sortable-item:nth-child(n+{left + 1}) {{border-style: dashed; opacity: .55;}}"
+        f".sortable-item:nth-child(n+{left + 1})::after {{content: \"\\00a0\\00a0·\\00a0not this session\";}}")
+
+
 def reorder(out: Path, queue: list[dict], left: int):
-    """A person changes the planner's order. The agent reads order.json before each run, and a card
-    waiting for approval makes way for the new first fault."""
-    with st.expander("Change the run order"):
-        sig = "|".join("+".join(q["ids"]) for q in queue)  # a new queue starts a fresh editor
-        with st.form(f"order-{out.name}-{hash(sig)}", border=False):
-            table = st.data_editor(
-                pd.DataFrame([{"Order": n + 1, "Fault": "+".join(q["ids"]), "Runs this session": "yes" if n < left
-                               else "no"} for n, q in enumerate(queue)]),
-                hide_index=True, width="stretch", disabled=["Fault", "Runs this session"],
-                column_config={"Order": st.column_config.NumberColumn("Order (edit)", min_value=1, step=1,
-                                                                      width="small")})
-            st.caption(f"Type a new number in the Order column, then apply. The top {left} run this session. "
-                       "If a run is waiting for your approval, it is replaced by the new first fault.")
-            if st.form_submit_button("Apply the new order"):
-                keys = table.sort_values("Order", kind="stable")["Fault"].tolist()
-                tmp = out / "order.tmp"
-                tmp.write_text(json.dumps(keys), encoding="utf-8")
-                os.replace(tmp, out / "order.json")  # one step: the agent never reads half a file
-                st.success(f"New order saved. The agent picks it up before the next run. Next up: {keys[0]}.")
+    """A person drags the planner's queue into another order. The agent reads order.json before each
+    run, and a card waiting for approval makes way for the new first fault."""
+    keys = ["+".join(q["ids"]) for q in queue]
+    # a toggle, not an expander: the component measures its height when it mounts, and inside a
+    # collapsed expander that is 0 px (design review, 2026-10-11)
+    if not st.toggle("Change the run order", key=f"reorder-{out.name}"):
+        return
+    st.caption(f"Drag a fault up or down. The top {left} run this session. If a run is waiting for your "
+               "approval, it is replaced by the new first fault.")
+    # a new queue (the agent applied an order, or a run finished) starts a fresh list
+    dragged = sort_items(keys, direction="vertical", custom_style=drag_style(left),
+                         key=f"order-{out.name}-{'|'.join(keys)}")
+    saved = read(out / "order.json")
+    if dragged != keys and dragged != saved:  # write once per drag: every write re-asks a waiting card
+        tmp = out / "order.tmp"
+        tmp.write_text(json.dumps(dragged), encoding="utf-8")
+        os.replace(tmp, out / "order.json")  # one step: the agent never reads half a file
+        st.toast(f"New order saved. Next up: {dragged[0]}.")
 
 
 # ---------------------------------------------------------------- 3 results
