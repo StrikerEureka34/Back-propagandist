@@ -1,0 +1,20 @@
+{
+  "id": "traffic-spike",
+  "scenario": "http-load",
+  "aborted": true,
+  "abort_reason": "p95_ms: 2 probes slower than 454 ms in last 5s, limit 250 ms",
+  "first_bad_probe_to_abort_s": 2.6,
+  "abort_to_stopped_s": 0.7,
+  "duration_s": 30.4,
+  "baseline_p95_ms": 15,
+  "impact": {
+    "probes": 29,
+    "failed": 0,
+    "p95_ms": 454,
+    "max_ms": 1971
+  },
+  "recovery_s": 1.9,
+  "krkn_exit": -9,
+  "krkn_failed": false,
+  "krkn": {}
+}

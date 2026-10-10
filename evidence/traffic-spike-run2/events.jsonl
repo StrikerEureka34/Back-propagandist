@@ -1,0 +1,40 @@
+{"ts": "2026-10-10T09:57:43.016+00:00", "event": "start", "id": "traffic-spike", "cmd": ["krknctl", "run", "http-load", "--wait-duration", "1", "--prometheus-url", "http://localhost:9090", "--target-endpoints", "GET http://frontend-proxy.otel-demo:8080/;GET http://frontend-proxy.otel-demo:8080/api/products", "--rate", "1000/1s", "--chaos-duration", "120s", "--namespace", "otel-demo", "--number-of-pods", "2"], "baseline_p95_ms": 15}
+{"ts": "2026-10-10T09:57:43.022+00:00", "event": "probe", "t": 0.0, "ok": true, "ms": 5}
+{"ts": "2026-10-10T09:57:44.022+00:00", "event": "probe", "t": 1.0, "ok": true, "ms": 5}
+{"ts": "2026-10-10T09:57:45.022+00:00", "event": "probe", "t": 2.0, "ok": true, "ms": 5}
+{"ts": "2026-10-10T09:57:46.022+00:00", "event": "probe", "t": 3.0, "ok": true, "ms": 4}
+{"ts": "2026-10-10T09:57:47.022+00:00", "event": "probe", "t": 4.0, "ok": true, "ms": 4}
+{"ts": "2026-10-10T09:57:48.022+00:00", "event": "probe", "t": 5.0, "ok": true, "ms": 4}
+{"ts": "2026-10-10T09:57:49.023+00:00", "event": "probe", "t": 6.0, "ok": true, "ms": 5}
+{"ts": "2026-10-10T09:57:50.023+00:00", "event": "probe", "t": 7.0, "ok": true, "ms": 6}
+{"ts": "2026-10-10T09:57:51.023+00:00", "event": "probe", "t": 8.0, "ok": true, "ms": 5}
+{"ts": "2026-10-10T09:57:52.023+00:00", "event": "probe", "t": 9.0, "ok": true, "ms": 5}
+{"ts": "2026-10-10T09:57:53.023+00:00", "event": "probe", "t": 10.0, "ok": true, "ms": 5}
+{"ts": "2026-10-10T09:57:54.023+00:00", "event": "probe", "t": 11.0, "ok": true, "ms": 5}
+{"ts": "2026-10-10T09:57:55.023+00:00", "event": "probe", "t": 12.0, "ok": true, "ms": 4}
+{"ts": "2026-10-10T09:57:56.023+00:00", "event": "probe", "t": 13.0, "ok": true, "ms": 5}
+{"ts": "2026-10-10T09:57:57.023+00:00", "event": "probe", "t": 14.0, "ok": true, "ms": 4}
+{"ts": "2026-10-10T09:57:58.023+00:00", "event": "probe", "t": 15.0, "ok": true, "ms": 4}
+{"ts": "2026-10-10T09:57:59.023+00:00", "event": "probe", "t": 16.0, "ok": true, "ms": 5}
+{"ts": "2026-10-10T09:58:00.023+00:00", "event": "probe", "t": 17.0, "ok": true, "ms": 5}
+{"ts": "2026-10-10T09:58:01.028+00:00", "event": "probe", "t": 18.0, "ok": true, "ms": 9}
+{"ts": "2026-10-10T09:58:02.024+00:00", "event": "probe", "t": 19.0, "ok": true, "ms": 5}
+{"ts": "2026-10-10T09:58:03.024+00:00", "event": "probe", "t": 20.0, "ok": true, "ms": 4}
+{"ts": "2026-10-10T09:58:04.024+00:00", "event": "probe", "t": 21.0, "ok": true, "ms": 5}
+{"ts": "2026-10-10T09:58:05.024+00:00", "event": "probe", "t": 22.0, "ok": true, "ms": 4}
+{"ts": "2026-10-10T09:58:06.024+00:00", "event": "probe", "t": 23.0, "ok": true, "ms": 4}
+{"ts": "2026-10-10T09:58:07.024+00:00", "event": "probe", "t": 24.0, "ok": true, "ms": 4}
+{"ts": "2026-10-10T09:58:08.024+00:00", "event": "probe", "t": 25.0, "ok": true, "ms": 5}
+{"ts": "2026-10-10T09:58:09.045+00:00", "event": "probe", "t": 26.0, "ok": true, "ms": 25}
+{"ts": "2026-10-10T09:58:11.991+00:00", "event": "probe", "t": 27.0, "ok": true, "ms": 1971}
+{"ts": "2026-10-10T09:58:12.669+00:00", "event": "probe", "t": 29.2, "ok": true, "ms": 454}
+{"ts": "2026-10-10T09:58:12.669+00:00", "event": "abort", "reason": "p95_ms: 2 probes slower than 454 ms in last 5s, limit 250 ms"}
+{"ts": "2026-10-10T09:58:13.374+00:00", "event": "stopped", "first_bad_to_abort_s": 2.6, "breach_to_stopped_s": 0.7}
+{"ts": "2026-10-10T09:58:13.789+00:00", "event": "recovery_probe", "ok": true, "ms": 415, "streak": 0}
+{"ts": "2026-10-10T09:58:15.285+00:00", "event": "recovery_probe", "ok": true, "ms": 495, "streak": 0}
+{"ts": "2026-10-10T09:58:16.290+00:00", "event": "recovery_probe", "ok": true, "ms": 5, "streak": 1}
+{"ts": "2026-10-10T09:58:17.295+00:00", "event": "recovery_probe", "ok": true, "ms": 4, "streak": 2}
+{"ts": "2026-10-10T09:58:18.300+00:00", "event": "recovery_probe", "ok": true, "ms": 5, "streak": 3}
+{"ts": "2026-10-10T09:58:19.306+00:00", "event": "recovery_probe", "ok": true, "ms": 5, "streak": 4}
+{"ts": "2026-10-10T09:58:20.312+00:00", "event": "recovery_probe", "ok": true, "ms": 6, "streak": 5}
+{"ts": "2026-10-10T09:58:20.313+00:00", "event": "end", "id": "traffic-spike", "scenario": "http-load", "aborted": true, "abort_reason": "p95_ms: 2 probes slower than 454 ms in last 5s, limit 250 ms", "first_bad_probe_to_abort_s": 2.6, "abort_to_stopped_s": 0.7, "duration_s": 30.4, "baseline_p95_ms": 15, "impact": {"probes": 29, "failed": 0, "p95_ms": 454, "max_ms": 1971}, "recovery_s": 1.9, "krkn_exit": -9, "krkn_failed": false, "krkn": {}}
