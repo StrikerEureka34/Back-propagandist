@@ -525,7 +525,7 @@
     },
     "fault_ended_at": 1791654706.2,
     "recovered_s": 270,
-    "recovery_checked_s": 434
+    "recovery_checked_s": 900
   },
   "blast-loss": {
     "tier": "high",
@@ -900,6 +900,118 @@
       ]
     },
     "fault_ended_at": 1791668769.0,
+    "recovered_s": 210,
+    "recovery_checked_s": 215,
+    "recovery_live": true
+  },
+  "shipping-ship-errors": {
+    "tier": "high",
+    "effects": [
+      {
+        "kind": "errors",
+        "service": "checkout",
+        "what": "checkout errors 0% -> 83% (10/12 calls)"
+      }
+    ],
+    "fault": "shipping quotes fine but every ship-order fails (500), after the card is charged",
+    "scenario": "service-hijacking",
+    "params": {
+      "scenario-file-path": "scenarios/shipping-ship-errors.yaml",
+      "disable-image-signature": "true"
+    },
+    "recovery_s": 0.0,
+    "shop": {
+      "probes": 174,
+      "failed": 0,
+      "p95_ms": 7,
+      "max_ms": 11
+    },
+    "baseline_p95_ms": 5,
+    "measured_at": "2026-10-10T22:47:56+00:00",
+    "windows": {
+      "baseline": [
+        1791671933,
+        1791672233
+      ],
+      "fault": [
+        1791672237,
+        1791672471
+      ]
+    },
+    "fault_ended_at": 1791672411.4,
+    "recovered_s": 150,
+    "recovery_checked_s": 155,
+    "recovery_live": true
+  },
+  "currency-down": {
+    "tier": "high",
+    "effects": [
+      {
+        "kind": "throughput",
+        "service": "cart",
+        "what": "cart served 1.35 -> 0.38 req/s"
+      },
+      {
+        "kind": "throughput",
+        "service": "flagd",
+        "what": "flagd served 9.25 -> 1.99 req/s"
+      },
+      {
+        "kind": "throughput",
+        "service": "frontend",
+        "what": "frontend served 16.58 -> 6.33 req/s"
+      },
+      {
+        "kind": "throughput",
+        "service": "frontend-proxy",
+        "what": "frontend-proxy served 17.36 -> 4.26 req/s"
+      },
+      {
+        "kind": "throughput",
+        "service": "image-provider",
+        "what": "image-provider served 4.53 -> 0.61 req/s"
+      },
+      {
+        "kind": "throughput",
+        "service": "product-catalog",
+        "what": "product-catalog served 5.75 -> 2.72 req/s"
+      },
+      {
+        "kind": "throughput",
+        "service": "recommendation",
+        "what": "recommendation served 0.87 -> 0.08 req/s"
+      }
+    ],
+    "fault": "nothing can reach currency (ingress :8080 dropped): non-USD prices and checkout",
+    "scenario": "pod-network-filter",
+    "params": {
+      "chaos-duration": 120,
+      "namespace": "otel-demo",
+      "pod-selector": "opentelemetry.io/name=currency",
+      "ingress": "true",
+      "egress": "false",
+      "ports": 8080
+    },
+    "recovery_s": 0.0,
+    "shop": {
+      "probes": 148,
+      "failed": 0,
+      "p95_ms": 6,
+      "max_ms": 12
+    },
+    "baseline_p95_ms": 5,
+    "measured_at": "2026-10-10T22:36:54+00:00",
+    "windows": {
+      "baseline": [
+        1791671451,
+        1791671601
+      ],
+      "fault": [
+        1791671602,
+        1791671810
+      ]
+    },
+    "fault_ended_at": 1791671749.6,
     "recovered_s": 210,
     "recovery_checked_s": 215,
     "recovery_live": true
