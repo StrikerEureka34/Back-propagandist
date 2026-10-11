@@ -1,3 +1,23 @@
+# Progress (Day 2)
+
+## Done
+- **Agent loop** (#7): planner (gpt-oss-120b) → you approve each run → krkn fault → measure → analyst
+  (gpt-oss-20b) → root causes, fixes, report. Live and replay.
+- **Fault bank** (#14): 15 faults + 3 pairs, all measured. 6 high from targeted faults. New today:
+  `shipping-ship-errors` (customers charged, then the order fails) and `currency-down`.
+- **Fix verified** (#19): catalog-kill high → low after 2 replicas + a 10 s preStop, 3 runs of 3.
+- **Combined failures** (#20): `chaos.py run a+b`, both faults under one kill switch; rated live.
+- **Agent page:** emergency stop, drag-and-drop run order, analyst follow-ups that run in the same
+  session, a Source column, and an animated "How the agent works" diagram.
+- **Safety:** one fault at a time on the machine (run lock); a stop reaches every wait; an aborted
+  node fault removes its leftover network delay.
+
+## Still to do
+- One agent session that finds ≥ 3 root causes on its own (criterion 1). Pool: shipping-ship-errors,
+  quote-garbage, currency-down, catalog-db-cutoff, cart-wipe; budget 5.
+- First live check that the analyst's follow-ups name real faults.
+- Polish (#12) and pitch (#13).
+
 # Progress (Day 1)
 
 ## Done

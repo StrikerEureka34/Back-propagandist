@@ -2,6 +2,52 @@
 
 Newest entry on top. Plain language. Each claim points at a commit or a measured result.
 
+## 2026-10-11: the agent runs safely, and the fix is proven
+
+**What changed.** The AI agent now runs real experiments end to end, with a person approving every one.
+The catalog fix is proven, two new faults found a serious checkout flaw, and several safety gaps
+were closed. Commits: 2436357, 7733d05, 2b436eb, b62a25b, e77798f, 02dcb48.
+
+**Decisions and why**
+
+- **Prove the fix by re-running the same fault.** We gave the product catalog a second copy and a
+  10-second goodbye before shutdown. Killing it went from "shop broken for 2 minutes" to "no visible
+  effect", three times out of three (2436357).
+- **Let the AI suggest the next test, but code decides.** After each run the analyst may propose one
+  follow-up. Rules allow at most two per session, never a broad fault, never a repeat, and a person
+  still approves it. A list of allowed faults stops it from inventing names (1697024).
+- **Only pair faults when the pair should teach something.** Forcing a pair into every session was
+  tried and dropped: two faults that just add up waste a run (4ab75c4).
+- **Give the person control at every step.** An emergency stop ends the whole session; drag and
+  drop changes the run order; one fault at a time on the machine (f9fc275, c53fc28, 0c9a479).
+
+**Results**
+
+- Customers can be charged and then have their order fail: checkout charges the card before it
+  ships and has no refund. When shipping failed, 10 of 12 orders broke while all 14 charges went
+  through (02dcb48).
+- Six faults rate high, all found by targeted faults. Both known-answer controls passed the same day
+  (2b436eb). Running two faults together works and cleans up after itself (7733d05).
+
+**Lessons learned**
+
+- **"Stopped" is not "gone".** The kill switch reported a stop, but a network delay stayed on the
+  server for 8 minutes. Cleanup now removes it, and we check what the shop does, not the exit code
+  (b62a25b).
+- **A dirty "before" hides real damage.** A fault started three minutes after another was stopped
+  looked harmless, because the "normal" window already held the earlier damage. Runs now wait for
+  a quiet window first (e77798f).
+- **Two faults at the same time spoil both results.** One overlap made a calibration check fail.
+  Now only one fault can run at a time (0c9a479).
+- **An AI asked to pick from a list must be shown the list.** Without it, every suggestion was a
+  made-up name and nothing ran.
+
+**Open decisions**
+
+- One agent session still has to find three root causes on its own (the success criterion).
+- The real fix for the checkout flaw (refund, or ship before charging) lives in the shop's code,
+  which we don't change; it goes in the report as a recommendation.
+
 ## 2026-10-10 (evening into 2026-10-11): Day 2 fault bank
 
 **What changed.** We built a "fault bank": a catalogue of 13 ways to break the shop, each one actually

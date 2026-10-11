@@ -40,20 +40,25 @@ AI findings ranked + fixes + score · stretch: re-run after a fix, live UI, comb
 | Issue | Piece | Files | Est | Parallel |
 |---|---|---|---|---|
 | #17 | P7 `llm()` providers (done) | `llm.py`, `.env.example`, `tests/test_llm.py` | - | B (StrikerEureka34) |
-| #18 | P9 rules: strength, leverage, score, pairs | `judge.py`, `tests/test_judge.py`, `docs/` | 45m | B, parallel with #7 |
+| #18 | P9 rules: strength, leverage, score, pairs (done) | `judge.py`, `tests/test_judge.py`, `docs/` | 45m | B, parallel with #7 |
 | #7 | P8 agent loop + replay runner | `agent.py`, `tests/test_agent.py`, `pyproject.toml` | 1h15 | B, after #17 |
-| #20 | P13 combo runner (`chaos.py run a+b`) | `chaos.py`, `bank.py`, `tests/test_chaos_abort.py` | 45m | A (TanmayBnz) |
-| #19 | P12 fix + re-run: catalog-kill, replicas 2 | `k8s/otel-values.yaml`, `evidence/` | 30m | A, after #20 |
+| #20 | P13 combo runner (`chaos.py run a+b`) (done) | `chaos.py`, `bank.py`, `tests/test_chaos_abort.py` | 45m | A (TanmayBnz) |
+| #19 | P12 fix + re-run: catalog-kill, replicas 2 (done) | `k8s/otel-values.yaml`, `evidence/` | 30m | A, after #20 |
 | #14 | Fault bank (ongoing: krkn-ai candidates, harvest) | `bank.py`, `experiments.toml` | - | A |
 
-Polish #12 (S+5:30–7:00) · Pitch #13 (S+7:00–9:00). Behind at S+3:00? Cut #19, then #20.
+Polish #12 (S+5:30–7:00) · Pitch #13 (S+7:00–9:00).
+
+## Status (2026-10-11)
+1. Root causes: the bank has 6 high from targeted faults (shipping-ship-errors, quote-garbage,
+   currency-down, catalog-db-cutoff, cart-wipe, blast-loss). Still to show in **one** session.
+2. **Fix verified:** catalog-kill high → low, 3 runs of 3 (`evidence/catalog-kill-fix/`, #19).
+3. **Controls pass the same day:** both on 2026-10-10.
 
 ## Out of scope
-- #16 (one list): parallel injection, exhaustive combinations / genetic ranking, faults that are
-  unsafe on kind, two laptops in one cluster, LangChain. None of them moves the criterion.
+- #16: parallel injection, exhaustive combinations, faults unsafe on kind, LangChain.
 
 ## Setup (done)
 - **kind `chaos`:** control plane + `chaos-worker` ("blast": backends) + `chaos-worker2` ("steady":
   monitoring, frontend). Shop, `/jaeger/ui` and `/grafana` at `localhost:8080`; Prometheus at `:9090`.
 - **krknctl v0.14.2-beta:** always pass `--wait-duration 1 --prometheus-url http://localhost:9090`.
-- **Fault bank:** 13 entries rated in `bank.json` on 2 workers; both controls pass.
+- **Fault bank:** 15 faults + 3 pairs rated in `bank.json` on 2 workers; both controls pass.

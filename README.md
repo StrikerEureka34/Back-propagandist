@@ -151,9 +151,10 @@ the measurement is broken, not the shop.
 
 | Tier | Faults (measured on the 2-worker cluster) |
 |---|---|
-| high | **blast-loss**: 10 % packet loss → checkout errors 56 %. **quote-garbage**: a 200 OK with a wrong body → checkout errors 58 %. **catalog-kill**: shop not healthy 120 s later. **catalog-db-cutoff**: frontend p95 → 15 s. **cart-wipe**: carts lost |
+| high | **shipping-ship-errors**: shipping fails after the charge → checkout errors 83 % while every card is charged. **quote-garbage**: a 200 OK with a wrong body → checkout errors 58 %. **currency-down**: frontend traffic 16.6 → 6.3 req/s. **blast-loss**: 10 % packet loss → checkout errors 56 %. **catalog-db-cutoff**: frontend p95 → 15 s. **cart-wipe**: carts lost |
 | medium | **blast-latency**: +200 ms → checkout p95 48 → 3,650 ms. **cpu-starve**: 100 % CPU. **recommendation-cutoff** |
-| low | payment-kill, kafka-outage, blast-memory |
-| controls | paymentFailure → high ✓, adHighCpu → low ✓ |
+| low | **catalog-kill** (high before the fix: 2 replicas + preStop, `evidence/catalog-kill-fix/`), payment-kill, kafka-outage, blast-memory |
+| pairs | blast-latency+catalog-kill → medium (the fix holds on a slow network). blast-latency+catalog-db-cutoff, cart-wipe+traffic-spike → high |
+| controls | paymentFailure → high ✓, adHighCpu → low ✓ (both on 2026-10-10) |
 
 `uv run python bank.py show` prints every effect behind each rating.
