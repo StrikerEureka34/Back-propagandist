@@ -80,6 +80,10 @@ Blue: a person · green: code · pink: a model · amber: the cluster.
 - Nothing reaches the cluster without a person's approval.
 - Two worker nodes give network faults a real network to slow. Monitoring lives on the steady node, so a fault can't blind the kill switch.
 
+One session, as the console's Agent page draws it:
+
+![How the agent works: pick the pool, planner, queue and guards, approve, fault and kill switch, measure, analyst, then root causes, fixer and report](refs/flow.jpeg)
+
 ### What each model reads
 
 | Model | Reads | Writes | Code checks |
@@ -134,7 +138,7 @@ Two scores, never mixed, both computed by rules. Formulas, reasons and examples:
 
 ### The fault bank
 
-![Which services each fault hurt: darker red is more damage](docs/bank-heatmap.png)
+![Fault bank heatmap: which services each fault hurt, darker red is more damage](refs/fault_bank.jpeg)
 
 Each fault is rated by measured damage, against the quiet minutes before it:
 
@@ -146,6 +150,7 @@ Each fault is rated by measured damage, against the quiet minutes before it:
 
 - **Pairs:** blast-latency + catalog-kill rates medium. blast-latency + catalog-db-cutoff and cart-wipe + traffic-spike rate high.
 - **Controls:** paymentFailure high ✓, adHighCpu low ✓.
+- **The ad column** in the low rows is noise: the ad pod runs out of memory on its own (see troubleshooting below).
 - **Every effect:** `uv run python bank.py show`.
 
 ## How we measure
