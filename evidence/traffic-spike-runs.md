@@ -50,3 +50,10 @@ Raw files for this run: `evidence/traffic-spike-run2/` (`summary.json`, `events.
 | abort decision to krkn killed and cleaned up | (part of the 5 s) | 0.7 s |
 | shop back to baseline | <= 60 s | 1.9 s |
 | leftover krkn pods/containers | none | not re-checked in this paste |
+
+## Run 3: slowness and error limits switched off
+The attack kept going, customers started getting timeouts, and the flood of traces crashed Jaeger
+(out of memory). The blast-radius check caught that and stopped the run at 52 s; with no stop at
+all it would have run its full 2 minutes. traffic-spike keeps these limits off, so the fault bank
+sees the full effect: only the blast-radius check and a manual stop end it early. (Moved here from
+the Day 1 README; this run's raw files weren't kept.)

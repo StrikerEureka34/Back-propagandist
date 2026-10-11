@@ -1,94 +1,181 @@
 # Back-propagandist
 
-We break a real online shop on purpose, watch what happens, and stop the damage before it
-spreads. The shop is the [OpenTelemetry Astronomy Shop](https://github.com/open-telemetry/opentelemetry-demo)
-(about 20 services, Apache-2.0). The breaking is done by [krkn](https://github.com/krkn-chaos/krkn).
-Everything runs in a local Kubernetes cluster (kind) on one laptop.
+AI-driven chaos engineering on a real online shop, the
+[OpenTelemetry Astronomy Shop](https://github.com/open-telemetry/opentelemetry-demo) (about 20
+services, Apache-2.0). Code maps the shop from its own traces, breaks it from the outside with
+[krkn](https://github.com/krkn-chaos/krkn) and measures every service. Models plan the experiments
+and explain what broke. A person approves every run. It all runs in a local kind cluster on one laptop.
 
-## The whole workflow
+[Architecture](#architecture) · [What we found](#what-we-found) · [Run it](#run-it) ·
+[What's where](#whats-where) · [More](#more)
 
+## Architecture
+
+```mermaid
+flowchart TB
+    you(["A person, in the console or a terminal<br/>picks the pool · approves every run · can stop anything"])
+
+    subgraph ctx["1 · Code builds the context"]
+        direction TB
+        map[("Dependency map<br/>depmap.py, from the shop's<br/>own Jaeger traces + kubectl")]
+        bank[("Fault bank<br/>bank.json · experiments.toml")]
+        docs[("Service facts · fix catalog<br/>docs/")]
+        pairs[("Fault strength<br/>allowed pairs · judge.py")]
+    end
+
+    subgraph loop["2 · Agent session · agent.py"]
+        direction LR
+        planner["Planner<br/>gpt-oss-120b<br/>orders the pool by leverage"]
+        approve{"Approve<br/>this run?"}
+        run["chaos.py<br/>fault + kill switch"]
+        rate["bank.py<br/>rates the damage<br/>from Prometheus"]
+        analyst["Analyst<br/>gpt-oss-20b<br/>what broke, and why"]
+        planner --> approve -- yes --> run --> rate --> analyst
+        analyst -. "next run" .-> approve
+    end
+
+    subgraph shop["The shop on a kind cluster"]
+        direction TB
+        krkn["krknctl → krkn<br/>kills a pod · cuts or<br/>slows the network<br/>hijacks a service"]
+        blast["blast node<br/>the shop's backends"]
+        steady["steady node<br/>frontend · flagd<br/>load generator<br/>Jaeger · Prometheus"]
+        krkn --> blast
+    end
+
+    subgraph out["3 · Rank, fix, report"]
+        direction TB
+        judge["judge.py<br/>leverage · root causes<br/>score · evidence check"]
+        fixer["Fixer per root cause<br/>gpt-oss-20b or 120b"]
+        summary["Summary<br/>gpt-oss-120b"]
+        report[/"report.md<br/>ranked findings · fixes · score"/]
+        judge --> fixer --> summary --> report
+    end
+
+    you -- "picks · approves · stops" --> loop
+    ctx -- "a context pack for each model" --> loop
+    loop -- "one fault at a time,<br/>shop checked every second" --> shop
+    loop -- "budget used" --> out
+
+    classDef who fill:#E8EEF7,stroke:#1C5CAB,color:#17150F
+    classDef rule fill:#E6F4EE,stroke:#199E70,color:#17150F
+    classDef ai fill:#FAE8EF,stroke:#D55181,color:#17150F
+    classDef infra fill:#FBF1DC,stroke:#C98500,color:#17150F
+    class you,approve who
+    class map,bank,docs,pairs,run,rate,judge,report rule
+    class planner,analyst,fixer,summary ai
+    class krkn,blast,steady infra
+    style ctx fill:none,stroke:#8C8577
+    style loop fill:none,stroke:#8C8577
+    style shop fill:none,stroke:#8C8577
+    style out fill:none,stroke:#8C8577
 ```
- Jaeger traces + cluster config
-            │
-            ▼
- 1 MAP      depmap.py ──────────────────────► console (app.py)
-            │ risky targets
-            ▼
- 2 PICK     a person picks the pool ─► the planner (AI) orders it ─► a person approves each run
-            │
-            ▼
- 3 BREAK    chaos.py ─► krknctl ─► krkn ─► kills a pod, or starts attacker / CPU-hog pods
-            │
-            ▼
- 4 WATCH    one check per second + "did any other pod break?"
-            │
-            ├── limit hit, or a person says stop
-            │        ▼
-            │   5 STOP   kill krkn, remove its pods
-            │        │
-            ▼        ▼
- 6 MEASURE  runs/<id>/summary.json: impact, time to stop, time to recover
-            bank.py: every service from Prometheus → high / medium / low (bank.json)
-```
 
-| Step | What happens | Who does it |
-|---|---|---|
-| 1 Map | Reads who calls whom from Jaeger traces, and how each service reaches the databases from its config. Flags the risky parts: no disk, many dependents. | us (`depmap.py`) |
-| 2 Pick | A person picks faults from the bank. The planner orders them by expected leverage, with a hypothesis each, and a person approves every run. An analyst explains each result as it comes in, and fixers propose one fix per root cause. | a person + the agent (`agent.py`) |
-| 3 Break | `chaos.py` starts `krknctl`, which runs krkn in its own container. krkn talks to Kubernetes and kills a pod, or starts attacker or CPU-hog pods. | krkn |
-| 4 Watch | Every second, one test request to the shop, like a customer would make, plus a check that no other pod broke. | us (`chaos.py`) |
-| 5 Stop | Too slow, too many errors, another pod down, running too long, or a person says stop: kill krkn, remove its pods. | us (`chaos.py`) |
-| 6 Measure | Wait until the shop is normal again, then write down the impact, the time to stop and the time to recover. Killed pods are restarted by Kubernetes, and krkn times that. The fault bank also rates the fault high / medium / low from every service's metrics. | us + krkn |
+Blue: a person · green: code, which computes every number · pink: a model · amber: the cluster.
 
-The map found 35 of the 36 links in the shop's official architecture diagram, plus 10 real
-ones the diagram leaves out. Biggest single point of failure: the feature-flag service (flagd),
-which 13 services depend on. You can see the map and the risk table in the console, and the
-per-service slowdown in Jaeger's Monitor tab.
+**A hybrid agent.** Code builds each model's context before it's asked and checks the answer
+after. The models only rank, write hypotheses and explain. `agent.py` runs the session as a
+LangGraph loop with one fresh model call per task, and nothing reaches the cluster without a
+person's approval. Two workers give network faults a real network to slow, and monitoring sits on
+the steady node, so a fault never blinds the kill switch.
+
+### What each model reads, and what code checks after
+
+| Model | Reads (packed by code) | Writes | Code checks after |
+|---|---|---|---|
+| **Planner** (the orchestrator), `gpt-oss-120b` | each fault in the pool: what it does, its strength, its target with the target's callers and risk flags from the map. Also the code-checked pairs, the run budget and the service facts. In a live session it also sees each fault's earlier rating. | the run order, with a hypothesis, a predicted tier and a reason for each | invented ids are dropped; faults it leaves out are added, mildest first; a person approves each run |
+| **Analyst**, one per run, `gpt-oss-20b` | the fault and its target, the hypothesis, the **measured** tier, the broken SLOs, how long the damage lasted, every effect `bank.py` measured, the service facts | what happened, why, whether the hypothesis held, one follow-up | the measured tier stands; only real files can be cited; the evidence check scores the note; at most 2 follow-ups, never a broad fault |
+| **Fixer**, one per root cause, `120b` if a finding is high, else `20b` | the findings that share the cause, the analyst's why, [`docs/fix-catalog.md`](docs/fix-catalog.md), the service facts | one fix, the change, the fault that proves it | the proving fault must exist; with no model, the catalog's row is used |
+| **Summary**, `gpt-oss-120b` | the ranking, the fixes, the resilience score, the planner's hit rate | 3 to 5 sentences, next tests | the order and every number come from `judge.py`; next tests must be known faults |
+
+The service facts are [`docs/service-facts.md`](docs/service-facts.md): what each service does and in what order,
+read from the shop's source. Models run on Groq (`gpt-oss-120b` on key 1, `gpt-oss-20b` on keys 2 and 3),
+with OpenRouter's `nemotron` as the last fallback. With no keys at all, rules do everything and
+each text is marked "(no AI)". Keys: [step 1 of Run it](#1-replay-on-any-laptop-linux-macos-or-windows).
+
+### The dependency map, from the shop's own traces
+
+We add no tracing of our own: the shop already sends OpenTelemetry traces to Jaeger.
+`depmap.py` builds the map from:
+
+- **Jaeger** (`/api/dependencies`, the last 15 minutes): who calls whom, and how often.
+- **kubectl** (`get deploy,statefulset`): data stores (Valkey, Kafka, Postgres) send no traces, so
+  their links come from each service's env vars. Ports, volumes and replicas give the risk flags:
+  `no-persistence` (a store with no volume: a restart loses its data) and `hub` (3 or more callers).
+- **The official diagram** ([`docs/official_edges.json`](docs/official_edges.json)) as a check: 35 of its 36
+  links found, plus 10 real ones it leaves out. Our monitoring is cut out of the map, so it's never a target.
+
+The map is used in three places:
+
+- **The planner's context:** each target's callers and risk flags.
+- **Pairs:** `judge.py` offers two faults as a pair only if they can meet: a shared caller within
+  two hops, a node fault, the entry point or a load spike. Independent pairs never reach a model.
+- **The console:** the map and the riskiest targets on its front page. Replay uses a recorded copy
+  (`refs/dependency-map.json`).
+
+### How the AI decides, and how it's scored
+
+- **Leverage ranks the findings:** impact (high 3, medium 2, low 1) ÷ fault strength (mild 1,
+  targeted 2, broad 3). A small fault that breaks a lot is the weakest point: blast-loss is 3 ÷ 1 = 3.0.
+- **The resilience score rates the system:** krkn's formula (critical SLO 3 points, warning 1;
+  passed ÷ total × 100) over SLOs a customer feels: customers get answers, no data lost, the shop
+  recovers and stays up (critical); other services answer, customers aren't 2x slower, nothing else
+  restarts (warnings). A customer page 10x slower, or over 2 s, also breaks "customers get answers".
+- **The two are never mixed.** Ranking by damage alone rewards the strongest fault, which is
+  krkn-ai's own lesson ("break everything"). Leverage rewards finding a lot with little.
+- **Every analyst note gets an evidence check:** −40 for each claim the measurement contradicts
+  (say, "no data loss" when carts emptied), −30 if it names nothing that broke, −20 for a sample
+  under 20 calls, −10 with no evidence. The model's own estimate is shown next to it, marked unchecked.
+
+### Safety controls
+
+- **A person approves every run**, on a card in the console or in the terminal, and can skip or
+  reorder runs. Following Bosch's AI code of ethics, people make the final call.
+- **The kill switch** (`chaos.py`) checks the shop every second and stops krkn when a fault passes
+  its limits (`experiments.toml`): p95, error rate, another pod down (blast radius) or the time limit.
+  `touch runs/STOP`, Ctrl+C or **Emergency stop** end it at any time.
+- **Cleanup** removes krkn's containers and helper pods, and any network delay left on the node.
+- **One fault at a time** on the whole machine (a run lock).
+- **Guards in code:** one target per run; no namespace-wide faults and nothing on the steady node;
+  never two broad faults together; the controls never enter the pool.
+- **Calibration:** two of the shop's planted bugs are known-answer controls. paymentFailure must
+  rate high and adHighCpu low, or the measurement is broken, not the shop.
+
+## What we found
+
+| Result | Evidence |
+|---|---|
+| The map found 35 of the 36 links in the official diagram, plus 10 it leaves out. The biggest single point of failure is the feature-flag service (flagd), with 13 services depending on it. | `uv run python depmap.py --check`, [docs/progress.md](docs/progress.md) |
+| Customers are charged, then lose the order: with shipping failing, 10 of 12 checkouts broke while all 14 card charges went through. Checkout charges before it ships and has no refund. | `bank.json`: `shipping-ship-errors` |
+| **Fix verified.** Killing the product catalog went from high to low after 2 replicas and a 10 s preStop, 3 runs of 3. | [evidence/catalog-kill-fix/](evidence/catalog-kill-fix/README.md) |
+| The kill switch stopped a 2,000 requests/s traffic spike 2.6 s after the first slow answer and cleaned up in 0.7 s. The shop was back to normal 1.9 s later. | [evidence/traffic-spike-runs.md](evidence/traffic-spike-runs.md) |
+| Two faults at once: blast-latency + catalog-kill rates medium, so the catalog fix holds on a slow network. | [evidence/combo-pair-blast-latency+catalog-kill/](evidence/combo-pair-blast-latency+catalog-kill/README.md) |
+| A live agent session ran 3 approved faults: findings ranked by leverage, a fix per root cause, resilience score 80/100. | [evidence/agent-live-session-1/report.md](evidence/agent-live-session-1/report.md) |
+| Both known-answer controls passed the same day (2026-10-10). | `uv run python bank.py show` |
+
+### The fault bank
+
+![Which services each fault hurt: darker red is more damage](docs/bank-heatmap.png)
+
+Each fault is injected by krkn from outside the app and rated by measured damage, against the
+quiet minutes before it. **High:** customers hit errors or lose data, or the shop doesn't
+recover. **Medium:** another service errors, or the customer side is 2x slower. **Low:** anything less.
+
+- **High:** shipping-ship-errors, quote-garbage, currency-down, blast-loss, catalog-db-cutoff, cart-wipe
+- **Medium:** blast-latency, cpu-starve, recommendation-cutoff
+- **Low:** catalog-kill (high before the fix), payment-kill, kafka-outage, blast-memory
+- **Pairs:** blast-latency + catalog-kill medium; blast-latency + catalog-db-cutoff and cart-wipe + traffic-spike high
+- **Controls:** paymentFailure high ✓, adHighCpu low ✓
+
+`uv run python bank.py show` prints every effect behind each rating. The Live run page draws the
+same heatmap live.
 
 ## How we measure
 
-- **Before:** 5 checks of the shop give its normal speed (the baseline). If the shop is already
-  unhealthy, the run refuses to start.
-- **During:** one check per second while krkn runs gives the impact: how many checks, how many
-  failed, the near-worst wait (p95) and the worst one.
-- **After:** checks continue until 5 in a row are normal again. That's the recovery time.
-- Every check is logged in `runs/<id>/events.jsonl`, and `summary.json` is computed from it,
-  so every number can be traced back to the log.
-- **Every service:** for the fault bank, `bank.py` compares each service's errors, p95 and
-  throughput (from traces in Prometheus), plus CPU, memory and restarts, with the 5 minutes
-  before the fault.
-
-## Where it runs
-
-```
-Laptop (16 CPU threads, 16 GB RAM)
-└── Docker
-    ├── chaos-control-plane   Kubernetes itself
-    ├── chaos-worker          "blast": the backend services; node faults hit this one
-    ├── chaos-worker2         "steady": monitoring, frontend, flagd, load generator
-    └── krknctl-…             krkn, only while an experiment runs
-```
-
-kind fakes the Kubernetes "nodes" as Docker containers, so they all share the laptop's CPU
-and memory. Two workers give network faults a real network to slow between the frontend and
-the backends. Keeping monitoring on the steady node means a fault never blinds the kill switch.
-
-## The traffic spike
-
-We hit the shop's front door with 2 attacker pods sending 1,000 requests a second each.
-
-- Normally the shop answers in about 15 ms.
-- Under the spike it slowed to 454 ms, with the worst request close to 2 seconds.
-- The kill switch noticed 2.6 s after the first slow answer and shut the attack down in 0.7 s.
-- The shop was back to normal 1.9 s later. None of our checks failed.
-
-We ran it again with the slowness and error limits switched off. The attack kept going,
-customers started getting timeouts, and the flood of traces crashed Jaeger (out of memory).
-The blast-radius check caught that and stopped the run at 52 s. Without any stop at all,
-it would have run its full 2 minutes. Its slowness and error limits are now switched off, so
-the fault bank sees the full effect: only the blast-radius check and a manual stop end it early.
-
-You can stop any run yourself: `touch runs/STOP` from another terminal, or Ctrl+C.
+- **The shop:** 5 checks before give its normal speed (an unhealthy shop refuses the run), one a
+  second during gives the impact, and checks after until 5 in a row are normal give the recovery
+  time. Every check is in `runs/<id>/events.jsonl`; `summary.json` is computed from it.
+- **Every service:** `bank.py` compares each service's errors, p95 and throughput (from the traces
+  in Prometheus), plus CPU, memory, restarts and cart contents, with the quiet minutes before the fault.
 
 ## Run it
 
@@ -254,22 +341,11 @@ evidence/           results from our runs on the cluster
 runs/               output of each run (local only)
 ```
 
-## The fault bank
+## More
 
-Every fault is injected from outside the app by krkn, measured, and rated:
-- **high:** customers hit errors or lose data, or the shop doesn't recover
-- **medium:** another service errors, or the customer-facing side is 2x slower
-- **low:** anything less
-
-Two of the shop's own planted bugs are known-answer controls. If they don't rate as expected,
-the measurement is broken, not the shop.
-
-| Tier | Faults (measured on the 2-worker cluster) |
-|---|---|
-| high | **shipping-ship-errors**: shipping fails after the charge → checkout errors 83 % while every card is charged. **quote-garbage**: a 200 OK with a wrong body → checkout errors 58 %. **currency-down**: frontend traffic 16.6 → 6.3 req/s. **blast-loss**: 10 % packet loss → checkout errors 56 %. **catalog-db-cutoff**: frontend p95 → 15 s. **cart-wipe**: carts lost |
-| medium | **blast-latency**: +200 ms → checkout p95 48 → 3,650 ms. **cpu-starve**: 100 % CPU. **recommendation-cutoff** |
-| low | **catalog-kill** (high before the fix: 2 replicas + preStop, `evidence/catalog-kill-fix/`), payment-kill, kafka-outage, blast-memory |
-| pairs | blast-latency+catalog-kill → medium (the fix holds on a slow network). blast-latency+catalog-db-cutoff, cart-wipe+traffic-spike → high |
-| controls | paymentFailure → high ✓, adHighCpu → low ✓ (both on 2026-10-10) |
-
-`uv run python bank.py show` prints every effect behind each rating.
+- [docs/decisions-and-lessons.md](docs/decisions-and-lessons.md): what we decided each day, why, and what went wrong
+- [docs/fix-catalog.md](docs/fix-catalog.md): the fixes the fixer picks from, one per root cause
+- [docs/service-facts.md](docs/service-facts.md): what each service does, as the models read it
+- [docs/hackathon-problem-statement.md](docs/hackathon-problem-statement.md): the challenge, transcribed from the slides
+- [docs/progress.md](docs/progress.md): what's done and what's left, per day
+- [evidence/](evidence/): raw files from every run quoted above
