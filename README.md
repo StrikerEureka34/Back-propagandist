@@ -92,32 +92,145 @@ You can stop any run yourself: `touch runs/STOP` from another terminal, or Ctrl+
 
 ## Run it
 
-Tested on Arch Linux (Ryzen 7 6800H, 16 GB RAM).
+There are two ways to run it:
 
-**You need:** docker, kubectl, helm, jq, curl, [uv](https://docs.astral.sh/uv/),
-[kind](https://kind.sigs.k8s.io/) v0.33.0 and [krknctl](https://github.com/krkn-chaos/krknctl) v0.14.2-beta.
+- **Replay, on any laptop.** No cluster; setup is a clone and `uv sync`. The agent replays the ratings
+  recorded in `bank.json`, and the console shows the map recorded on our cluster.
+- **Live.** A kind cluster with the shop, and real faults. About 20-40 minutes the first time,
+  mostly image downloads. Tested on Arch Linux (Ryzen 7 6800H, 16 threads, 16 GB RAM).
+
+### 1. Replay on any laptop (Linux, macOS or Windows)
+
+You need git, [uv](https://docs.astral.sh/uv/) and Python 3.12+ (uv installs it if missing).
 
 ```bash
-# cluster + shop (first time ~20-40 min, mostly image downloads)
-kind create cluster --config k8s/kind.yaml
+git clone https://github.com/StrikerEureka34/Back-propagandist && cd Back-propagandist
+uv sync
+cp .env.example .env        # then fill in the keys you have (below); empty is fine
+uv run pytest -q            # 99 tests, no cluster or keys needed
+uv run streamlit run app.py # console at http://localhost:8501; run it from the repo root
+```
+
+On the console's **Agent** page, pick **Replay**, tick the faults, and press **Start session**.
+Or from a terminal:
+
+```bash
+uv run python agent.py --replay bank.json --auto-approve        # every rated fault, budget 8
+uv run python agent.py --replay bank.json --pool quote-garbage,cart-wipe,currency-down --budget 3
+```
+
+Without `--auto-approve`, the agent asks you to approve each run in the terminal. The report
+goes to `runs/session-<time>/report.md`, with `session.json` next to it. A sample is in
+`evidence/agent-replay-report.md`.
+
+**AI keys (`.env`).** Every key is optional. A key that's missing is skipped and the next one
+in the chain answers:
+
+| Variable | Used for |
+|---|---|
+| `GROQ_API_KEY` | the planner, the report summary and high-severity fixes (`openai/gpt-oss-120b`) |
+| `GROQ_API_KEY_2`, `GROQ_API_KEY_3` | the analyst for each run, and medium/low fixes (`openai/gpt-oss-20b`) |
+| `OPENROUTER_API_KEY` | the last fallback for every role (`nvidia/nemotron-3.5-lightning:free`) |
+
+Free keys: [console.groq.com](https://console.groq.com/keys) and
+[openrouter.ai](https://openrouter.ai/keys). Groq limits each organization, so a second key from
+the same account adds no capacity. **With no keys at all, the agent still runs.** Rules order
+the faults, and every text the models would write is marked "(no AI)". Every number comes from
+rules either way. Answers are cached in `runs/llm-cache/`, so the same session replayed twice costs nothing.
+
+### 2. Live: build the cluster (once)
+
+You need docker, kubectl, helm, jq, curl, uv, [kind](https://kind.sigs.k8s.io/) v0.33.0 and
+[krknctl](https://github.com/krkn-chaos/krknctl) v0.14.2-beta. Tested with docker 29.8,
+kubectl 1.37, helm 4.3 and Kubernetes 1.37 nodes. krknctl runs krkn in a Docker container and
+pulls its image on first use, so the first fault needs internet.
+
+```bash
+kind create cluster --config k8s/kind.yaml        # control plane + 2 workers, ports 8080 and 9090
 helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts
 helm install otel open-telemetry/opentelemetry-demo --version 0.42.3 -n otel-demo \
   --create-namespace -f k8s/otel-values.yaml --wait --timeout 20m
-
-uv sync
-uv run python depmap.py --check        # dependency map vs the official diagram
-uv run streamlit run app.py            # console with the map: http://localhost:8501
-uv run python chaos.py list            # the failure menu
-uv run python chaos.py run traffic-spike
-uv run python bank.py run all          # rate every fault (~3-5 min each)
-uv run python bank.py show             # the fault bank, by tier
-uv run python agent.py --replay bank.json --auto-approve   # the agent over recorded ratings, no cluster
-uv run python agent.py --pool blast-loss,cart-wipe --budget 8   # live: you approve every run
-uv run pytest -q                       # tests (Linux)
+# the catalog-kill fix (#19): helm can't set this, so re-apply it after every install or upgrade
+kubectl patch deployment product-catalog -n otel-demo --patch-file k8s/product-catalog-patch.yaml
 ```
 
-Shop, Jaeger and Grafana: http://localhost:8080 (`/jaeger/ui`, `/grafana`).
-Prometheus: http://localhost:9090.
+Check that it came up:
+
+```bash
+kubectl get nodes                                  # chaos-control-plane, chaos-worker, chaos-worker2: Ready
+kubectl get pods -n otel-demo                      # all Running (ad restarting now and then is known, see below)
+curl -s -o /dev/null -w "%{http_code}\n" localhost:8080          # 200: the shop
+curl -s localhost:9090/-/ready                                    # Prometheus is Ready
+uv run python depmap.py --check                    # found 35 of 36 official links, 10 extra
+```
+
+Shop, Jaeger and Grafana are at http://localhost:8080 (`/jaeger/ui`, `/grafana`). Prometheus is
+at http://localhost:9090. Give the load generator about 5 minutes after install before the
+first fault, so there's traffic to compare against.
+
+Short on memory (under 3 GB free)? Follow the comments in `k8s/otel-values.yaml` to switch off
+agent, chatbot, mcp and opensearch, then uninstall and install again. The chart can't change
+these in place.
+
+### 3. Live: run faults
+
+One fault at a time, across the whole machine. A second run is refused with "another fault is
+running". A run also refuses to start while the shop is unhealthy.
+
+```bash
+uv run python chaos.py list                            # the failure menu
+uv run python chaos.py run catalog-kill                # one fault + kill switch; writes runs/<id>/
+uv run python chaos.py run blast-latency+catalog-kill  # a pair under one kill switch
+uv run python bank.py run quote-garbage cart-wipe      # rate faults high / medium / low into bank.json
+uv run python bank.py run control-payment-failure control-ad-cpu   # the two known-answer controls
+uv run python bank.py show                             # the bank, every effect behind each rating
+```
+
+- **How long:** about 3-5 minutes per fault in `bank.py`, plus a 5-minute quiet wait first if
+  a fault ran recently. A dirty baseline once rated shipping-ship-errors low; the wait is the fix.
+- **Rate faults by name, not with `bank.py run all`.** `all` includes `traffic-spike`, whose
+  slowness and error limits are switched off on purpose, so only the blast-radius check or a
+  manual stop ends it early.
+- **Controls:** `control-payment-failure` must rate high and `control-ad-cpu` low. If either
+  fails, the measurement is broken, not the shop. `bank.py show` marks pass or FAIL.
+
+### 4. Live: an agent session
+
+```bash
+uv run python agent.py --pool shipping-ship-errors,quote-garbage,currency-down,catalog-db-cutoff,cart-wipe --budget 5
+```
+
+Or use the console's **Agent** page (Live): pick the pool, then approve, skip or stop each run
+on its card. Drag the queue to change the order. **Emergency stop** ends the whole session.
+
+- `--pairs` also lets the planner queue code-checked pairs. It only queues one when it expects
+  the pair to show something neither fault shows alone.
+- The analyst can add up to 2 follow-up faults per session. You still approve each one.
+- Plan on 5-15 minutes per run, because each rating waits for the damage to clear.
+- The output goes to `runs/session-<time>/`: `report.md`, `session.json`, `progress.json`, and
+  `agent.log` when started from the console. A recorded live session is in
+  `evidence/agent-live-session-1/`.
+
+### Stop anything, at any time
+
+`touch runs/STOP` from any terminal, Ctrl+C, or Emergency stop on the Agent page. The runner
+kills krkn, removes its containers and helper pods, and clears a node network fault krkn
+left behind. The next session or bank run clears the STOP file itself.
+
+### If something goes wrong
+
+| What you see | What to do |
+|---|---|
+| `another fault is running (...)` | A run is still going, maybe in another terminal or the console. Wait for it, or `touch runs/STOP`. |
+| `shop not healthy ... refusing to inject` | The last fault hasn't cleared yet. Wait, check `kubectl get pods -n otel-demo`, then run again. |
+| `refused a+b: ...` | That pair is forbidden by `judge.py`: a control, two broad faults, or the same target twice. |
+| The `ad` pod keeps restarting | Known. It runs out of memory (limit 300Mi) on its own; see #12. Ad cells in the bank are noise and only low tier. |
+| A hard crash left something behind | `docker ps -a \| grep krknctl` (remove with `docker rm -f`), `kubectl get pods -n default` (krkn helper pods), and `docker exec chaos-worker tc qdisc show` (a leftover `netem` slows the backend node). |
+| catalog-kill rates high again | The preStop patch was lost by a helm upgrade. Re-run the `kubectl patch` line in step 2. |
+| The console shows old behaviour after a pull | Restart Streamlit; it doesn't reload modules other than the page. |
+| The theme is missing | Streamlit was started outside the repo root. |
+| `rate limited, waiting N s` | Groq's free tier. The agent waits up to 60 s, then falls back to the next key. |
+| Windows | Replay and the console work. Live faults and the run lock need Linux. |
 
 ## What's where
 
@@ -130,10 +243,12 @@ judge.py            the rules: leverage, resilience score, root causes, safe pai
 depmap.py           builds the dependency map and the risk flags
 chaos.py            runs a krkn experiment, watches it, stops it, cleans up
 bank.py, bank.json  rates each fault high / medium / low from measured effects
+heat.py             the heatmaps on the Live run page
+agent_flow.py/.html the animated agent diagram on the Agent page
 experiments.toml    the failure menu and each one's stop limits
 scenarios/          krkn scenario files (service hijacking)
 k8s/                kind cluster config + shop install settings
-tests/              tests for the map and the kill switch
+tests/              tests: map, kill switch, run lock, pairs, bank rules, agent, heatmaps
 docs/               problem statement, official diagram edges, progress notes
 evidence/           results from our runs on the cluster
 runs/               output of each run (local only)
