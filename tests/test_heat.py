@@ -22,6 +22,18 @@ def test_blast_rows_show_who_each_fault_hurt():
     assert not df.Fault.str.startswith("control-").any()  # controls check the scale; not on the map
 
 
+def test_the_faults_own_hog_pod_is_not_a_damaged_service():
+    hog = {"blast-memory": {"tier": "low", "effects": [
+        {"kind": "memory", "service": "krkn-hog", "what": "krkn-hog memory 0 -> 1049 MiB"},
+        {"kind": "latency", "service": "ad", "what": "ad p95 5 -> 69 ms"}]}}
+    assert list(heat.blast_rows(hog).Service) == ["ad"]
+
+
+def test_every_service_name_shows_on_the_fault_map():
+    axis = heat.blast_chart(BANK).to_dict()["layer"][0]["encoding"]["x"]["axis"]
+    assert axis["labelAngle"] != 0  # flat names collide and every other one is hidden
+
+
 def test_service_rows_against_usual():
     usual = {"services": {"checkout": {"calls": 100, "errors": 0, "rps": 1.0, "p95_ms": 48}}}
     now = {"services": {"checkout": {"calls": 100, "errors": 30, "rps": 0.4, "p95_ms": 960}}}

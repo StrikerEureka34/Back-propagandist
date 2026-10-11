@@ -10,6 +10,7 @@ import bank
 
 TOP = 5  # top of the colour scale: the worst cell (3) lands near heat-6, so its label stays readable
 SHOP = "whole shop"  # column for damage that isn't one service's: data lost, no recovery, shop down
+FAULT_PODS = "krkn-"  # krkn's own hog pods: their CPU/memory is the fault running, not damage to the shop
 WHOLE = {"data-loss": "data lost", "no-recovery": "no recovery", "shop-down": "shop down", "kill-switch": "kill switch"}
 
 
@@ -42,7 +43,7 @@ def blast_rows(entries: dict) -> pd.DataFrame:
         for e in entry["effects"]:
             svc = SHOP if e["kind"] in WHOLE else e.get("service")
             level, label = damage(e)
-            if not svc or not level:
+            if not svc or not level or svc.startswith(FAULT_PODS):
                 continue
             cell = cells.setdefault((fault, svc), {"Fault": fault, "Service": svc, "Damage": 0, "Label": "",
                                                     "Effect": [], "Tier": entry["tier"]})
@@ -74,16 +75,17 @@ def service_rows(usual: dict, now: dict) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def chart(df: pd.DataFrame, x: str, y: str, x_order: list, y_order: list) -> alt.LayerChart:
-    """A labelled heatmap; hover a cell for the measured numbers."""
+def chart(df: pd.DataFrame, x: str, y: str, x_order: list, y_order: list, angle: int = 0) -> alt.LayerChart:
+    """A labelled heatmap; hover a cell for the measured numbers. Tilt the column names (`angle`) when there
+    are many: flat ones collide and Vega hides every other one."""
     base = alt.Chart(df).encode(
-        x=alt.X(f"{x}:N", sort=x_order, title=None, axis=alt.Axis(orient="top", labelAngle=0, labelLimit=140)),
-        y=alt.Y(f"{y}:N", sort=y_order, title=None, axis=alt.Axis(labelLimit=220)))
+        x=alt.X(f"{x}:N", sort=x_order, title=None, axis=alt.Axis(orient="top", labelAngle=angle, labelLimit=140, labelFontSize=12)),
+        y=alt.Y(f"{y}:N", sort=y_order, title=None, axis=alt.Axis(labelLimit=220, labelFontSize=12)))
     cells = base.mark_rect().encode(
         color=alt.Color("Damage:Q", scale=alt.Scale(domain=[0, TOP]), legend=None),
         tooltip=[alt.Tooltip(f"{y}:N"), alt.Tooltip(f"{x}:N"), alt.Tooltip("Effect:N")])
-    labels = base.mark_text(fontSize=11).encode(text="Label:N")
-    return (cells + labels).properties(height=alt.Step(28))
+    labels = base.mark_text(fontSize=12).encode(text="Label:N")
+    return (cells + labels).properties(height=alt.Step(28), padding={"top": 8})
 
 
 def blast_chart(entries: dict) -> alt.LayerChart | None:
@@ -93,7 +95,7 @@ def blast_chart(entries: dict) -> alt.LayerChart | None:
     order = {"high": 0, "medium": 1, "low": 2}
     faults = sorted(df["Fault"].unique(), key=lambda f: (order[entries[f]["tier"]], -df[df.Fault == f]["Damage"].sum(), f))
     services = sorted(df["Service"].unique(), key=lambda s: (s != SHOP, -df[df.Service == s]["Damage"].sum(), s))
-    return chart(df, "Service", "Fault", services, faults)
+    return chart(df, "Service", "Fault", services, faults, angle=-40)
 
 
 def service_chart(usual: dict, now: dict) -> alt.LayerChart:
