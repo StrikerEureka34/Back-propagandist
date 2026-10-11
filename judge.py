@@ -66,9 +66,11 @@ def strength(exp: dict) -> str:
     return "targeted"  # one service killed, cut off or hijacked
 
 
-def _points(exp_id: str, entries: dict) -> int:
-    """A pair "a+b" pushes as hard as both of its faults together."""
-    return sum(STRENGTH[strength(entries[x])] for x in exp_id.split("+") if x in entries) or STRENGTH["targeted"]
+def _points(exp_id: str, entry: dict) -> int:
+    """A pair "a+b" pushes as hard as both of its faults together. Read from the pair's own entry
+    (scenario "sa+sb", params keyed by fault id, chaos.py), since its halves may never be rated alone."""
+    halves = zip(exp_id.split("+"), entry["scenario"].split("+"))
+    return sum(STRENGTH[strength({"scenario": s, "params": entry.get("params", {}).get(x, {})})] for x, s in halves)
 
 
 def _cause(entry: dict) -> tuple[str, dict | None]:
@@ -189,7 +191,7 @@ def rank(entries: dict, predicted: dict | None = None) -> list[dict]:
     for exp_id, e in entries.items():
         if "control" in e or e.get("scenario") == "flagd":
             continue  # controls check the measuring scale, they aren't findings
-        points = _points(exp_id, entries) if "+" in exp_id else STRENGTH[strength(e)]
+        points = _points(exp_id, e) if "+" in exp_id else STRENGTH[strength(e)]
         passed, total, broken = score(e)
         rows.append({
             "id": exp_id, "tier": e["tier"], "strength": "pair" if "+" in exp_id else strength(e),

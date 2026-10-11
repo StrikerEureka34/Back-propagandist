@@ -144,3 +144,13 @@ def test_rank_rows_carry_the_reasoning():
     assert rows["blast-loss"]["decided_by"].startswith("checkout errors")
     assert rows["quote-garbage"]["repeat_of"] == "blast-loss"  # same cause as #1
     assert "no data lost" in rows["cart-wipe"]["broken"]
+
+
+def test_a_pair_pushes_as_hard_as_both_faults():
+    # a session holds only the pair's own entry, and traffic-spike was never rated alone: the pair's
+    # strength must come from its own scenario and params, not from looking its halves up
+    pair = {"tier": "high", "scenario": "pod-scenarios+http-load", "effects": [],
+            "params": {"cart-wipe": {"pod-label": "opentelemetry.io/name=valkey-cart"},
+                       "traffic-spike": {"rate": "1000/1s"}}}
+    row = judge.rank({"cart-wipe+traffic-spike": pair})[0]
+    assert judge.leverage_text(row) == "3 ÷ 5 = 0.6"  # targeted 2 + broad 3: a broad half costs leverage
