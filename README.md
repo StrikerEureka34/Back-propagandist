@@ -13,6 +13,13 @@ services, Apache-2.0), in a local kind cluster on one laptop.
 
 ## Architecture
 
+![Architecture: code builds the context, the agent session runs one approved fault at a time on the kind cluster, then code ranks and models explain](refs/flow_chart.png)
+
+Colours: blue a person · green code · purple a model · amber the cluster · coral the output.
+
+<details>
+<summary>The same diagram as text (Mermaid)</summary>
+
 ```mermaid
 flowchart TB
     you(["A person, in the console or a terminal<br/>picks the pool · approves every run · can stop anything"])
@@ -60,7 +67,7 @@ flowchart TB
 
     classDef who fill:#E8EEF7,stroke:#1C5CAB,color:#17150F
     classDef rule fill:#E6F4EE,stroke:#199E70,color:#17150F
-    classDef ai fill:#FAE8EF,stroke:#D55181,color:#17150F
+    classDef ai fill:#ECE9F7,stroke:#4A3AA7,color:#17150F
     classDef infra fill:#FBF1DC,stroke:#C98500,color:#17150F
     class you,approve who
     class map,bank,docs,pairs,run,rate,judge,report rule
@@ -72,17 +79,13 @@ flowchart TB
     style out fill:none,stroke:#8C8577
 ```
 
-Blue: a person · green: code · pink: a model · amber: the cluster.
+</details>
 
 **A hybrid agent:**
 - Code builds each model's context and checks its answer. Models only rank, hypothesise and explain.
 - `agent.py` is a LangGraph loop, with one fresh model call per task.
 - Nothing reaches the cluster without a person's approval.
 - Two worker nodes give network faults a real network to slow. Monitoring lives on the steady node, so a fault can't blind the kill switch.
-
-One session, as the console's Agent page draws it:
-
-![How the agent works: pick the pool, planner, queue and guards, approve, fault and kill switch, measure, analyst, then root causes, fixer and report](refs/flow.jpeg)
 
 ### What each model reads
 
