@@ -87,13 +87,64 @@ flowchart TB
 - Nothing reaches the cluster without a person's approval.
 - Two worker nodes give network faults a real network to slow. Monitoring lives on the steady node, so a fault can't blind the kill switch.
 
+### How the agents hand off
+
+- **The orchestrator is code:** `agent.py`'s LangGraph graph calls each model once per task, with a fresh context pack. Models never call each other, and every answer comes back through rules.
+- **Two feedback loops:**
+  - Within a session, an allowed analyst follow-up joins the queue as the next run. At most 2 per session, never a broad fault.
+  - Across sessions, the fixer names the fault that proves its fix. You apply the fix and re-run that fault.
+
+![agent.py as a LangGraph StateGraph: START, plan, run_next looping on itself for the next run or its follow-up, fix, report, END, and the next session re-running the fixed fault](refs/langgraph.png)
+
+<details>
+<summary>The same flow, call by call (Mermaid)</summary>
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor You
+    participant G as Orchestrator<br/>agent.py (LangGraph)
+    participant P as Planner + summary<br/>gpt-oss-120b
+    participant R as Rules<br/>judge.py
+    participant K as chaos.py + bank.py<br/>krkn on the cluster
+    participant A as Analyst sub-agent<br/>gpt-oss-20b
+    participant F as Fixer sub-agent<br/>20b or 120b
+
+    You->>G: pool + run budget
+    G->>R: fault strengths, allowed pairs
+    G->>P: context pack: pool, map facts, pairs, service facts
+    P-->>G: ranked queue with hypotheses
+    Note over G: invented ids dropped, left-out faults added
+    loop each run, until the budget is used or you stop
+        G->>You: approve the next fault?
+        You-->>G: approve, skip or stop
+        G->>K: run one fault under the kill switch
+        K-->>G: measured effects and tier
+        G->>A: fresh sub-agent: measured tier, effects, hypothesis
+        A-->>G: what broke, why, a follow-up
+        G->>R: evidence check, follow-up rules
+        Note over G,R: feedback loop: an allowed follow-up<br/>joins the queue as the next run
+    end
+    G->>R: rank by leverage, group by root cause, score
+    loop each root cause
+        G->>F: fresh sub-agent: findings + fix catalog
+        F-->>G: proposed fix + the fault that proves it
+    end
+    G->>P: ranking, fixes, score
+    P-->>G: summary, next tests
+    G->>You: report.md
+    Note over You,G: you apply a fix and re-run its fault:<br/>catalog-kill went high → low, score up
+```
+
+</details>
+
 ### What each model reads
 
 | Model | Reads | Writes | Code checks |
 |---|---|---|---|
 | **Planner** `gpt-oss-120b` | pool faults, their strength and map facts; allowed pairs; budget | run order, hypothesis, predicted tier | invented ids dropped; you approve each run |
 | **Analyst** `gpt-oss-20b` | the **measured** tier, broken SLOs, effects | what broke, why, a follow-up | measured tier stands; evidence check; ≤ 2 follow-ups |
-| **Fixer** `20b` / `120b` | findings sharing one root cause; fix catalog | one fix, and the fault that proves it | the proving fault must exist |
+| **Fixer** `20b` / `120b` | findings sharing one root cause; fix catalog | a proposed fix (you apply it), and the fault that proves it | the proving fault must exist |
 | **Summary** `gpt-oss-120b` | ranking, fixes, score | 3 to 5 sentences | every number comes from `judge.py` |
 
 - Every model also reads [`docs/service-facts.md`](docs/service-facts.md), which we wrote from the shop's source.
