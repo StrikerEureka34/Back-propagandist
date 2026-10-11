@@ -187,7 +187,7 @@ Two scores, never mixed, both computed by rules. Formulas, reasons and examples:
 | **Fix verified:** catalog-kill went from high to low, 3 runs of 3 | [catalog-kill-fix](evidence/catalog-kill-fix/README.md) |
 | Kill switch: stopped 2.6 s after the breach, cleaned up 0.7 s later | [traffic-spike-runs](evidence/traffic-spike-runs.md) |
 | Pair: blast-latency + catalog-kill rates medium, so the fix holds | [combo-pair](evidence/combo-pair-blast-latency+catalog-kill/README.md) |
-| Agent session: ranked findings, fixes, score 80/100 | [report.md](evidence/agent-live-session-1/report.md) |
+| 4 live agent sessions: ranked findings, fixes, scores; the demo session found 2 high weaknesses | [SUBMIT.md](SUBMIT.md) |
 | Both known-answer controls passed | `bank.py show` |
 
 ### The fault bank
@@ -378,6 +378,7 @@ runs/               output of each run (local only)
 
 ## More
 
+- [SUBMIT.md](SUBMIT.md): the findings report: the demo session, earlier sessions, every weakness and its fix
 - [docs/decisions-and-lessons.md](docs/decisions-and-lessons.md): what we decided each day, why, and what went wrong
 - [docs/scoring.md](docs/scoring.md): leverage, SLO points, the resilience score, the evidence check and the model's own estimate, with examples
 - [docs/fix-catalog.md](docs/fix-catalog.md): the fixes the fixer picks from, one per root cause
