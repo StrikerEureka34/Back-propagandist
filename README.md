@@ -112,19 +112,18 @@ The map is used in three places:
 - **The console:** the map and the riskiest targets on its front page. Replay uses a recorded copy
   (`refs/dependency-map.json`).
 
-### How the AI decides, and how it's scored
+### How it's scored
 
-- **Leverage ranks the findings:** impact (high 3, medium 2, low 1) ÷ fault strength (mild 1,
-  targeted 2, broad 3). A small fault that breaks a lot is the weakest point: blast-loss is 3 ÷ 1 = 3.0.
-- **The resilience score rates the system:** krkn's formula (critical SLO 3 points, warning 1;
-  passed ÷ total × 100) over SLOs a customer feels: customers get answers, no data lost, the shop
-  recovers and stays up (critical); other services answer, customers aren't 2x slower, nothing else
-  restarts (warnings). A customer page 10x slower, or over 2 s, also breaks "customers get answers".
-- **The two are never mixed.** Ranking by damage alone rewards the strongest fault, which is
-  krkn-ai's own lesson ("break everything"). Leverage rewards finding a lot with little.
-- **Every analyst note gets an evidence check:** −40 for each claim the measurement contradicts
-  (say, "no data loss" when carts emptied), −30 if it names nothing that broke, −20 for a sample
-  under 20 calls, −10 with no evidence. The model's own estimate is shown next to it, marked unchecked.
+Two scores, never mixed. Every number comes from rules (`judge.py`), not from a model.
+[docs/scoring.md](docs/scoring.md) has each formula, why we chose it, and a worked example.
+
+- **Leverage** = impact ÷ fault strength ranks the findings. A small push that breaks a lot is the
+  weakest point: blast-loss, 10 % packet loss → checkout errors, is 3 ÷ 1 = 3.0.
+- **The resilience score** rates the system: krkn's formula over 7 SLOs a customer feels (15
+  points per fault), summed over the pool. Ranking by damage instead would reward the strongest
+  fault, krkn-ai's "break everything" trap.
+- **The evidence check** scores each analyst note against the measurement (−40 for each contradicted
+  claim). The **model's own estimate** is shown under it, marked unchecked.
 
 ### Safety controls
 
@@ -344,6 +343,7 @@ runs/               output of each run (local only)
 ## More
 
 - [docs/decisions-and-lessons.md](docs/decisions-and-lessons.md): what we decided each day, why, and what went wrong
+- [docs/scoring.md](docs/scoring.md): leverage, SLO points, the resilience score, the evidence check and the model's own estimate, with examples
 - [docs/fix-catalog.md](docs/fix-catalog.md): the fixes the fixer picks from, one per root cause
 - [docs/service-facts.md](docs/service-facts.md): what each service does, as the models read it
 - [docs/hackathon-problem-statement.md](docs/hackathon-problem-statement.md): the challenge, transcribed from the slides
