@@ -147,7 +147,7 @@ services()
 with st.expander("Fault bank: every fault we have run, rated by measured damage"):
     rated = bank.load()
     if not rated:
-        st.write("No fault has been rated yet: uv run python bank.py run all")
+        st.write("No fault has been rated yet: uv run python bank.py run quote-garbage cart-wipe (README, step 3)")
     else:
         blast = heat.blast_chart(rated)
         if blast is not None:
