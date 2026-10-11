@@ -2,9 +2,11 @@
 
 AI-driven chaos engineering on a real online shop, the
 [OpenTelemetry Astronomy Shop](https://github.com/open-telemetry/opentelemetry-demo) (about 20
-services, Apache-2.0). Code maps the shop from its own traces, breaks it from the outside with
-[krkn](https://github.com/krkn-chaos/krkn) and measures every service. Models plan the experiments
-and explain what broke. A person approves every run. It all runs in a local kind cluster on one laptop.
+services, Apache-2.0), in a local kind cluster on one laptop.
+
+- **Code** maps the shop from its own traces, breaks it with [krkn](https://github.com/krkn-chaos/krkn) and measures every service.
+- **Models** plan the experiments and explain what broke.
+- **A person** approves every run.
 
 [Architecture](#architecture) · [What we found](#what-we-found) · [Run it](#run-it) ·
 [What's where](#whats-where) · [More](#more)
@@ -70,111 +72,86 @@ flowchart TB
     style out fill:none,stroke:#8C8577
 ```
 
-Blue: a person · green: code, which computes every number · pink: a model · amber: the cluster.
+Blue: a person · green: code · pink: a model · amber: the cluster.
 
-**A hybrid agent.** Code builds each model's context before it's asked and checks the answer
-after. The models only rank, write hypotheses and explain. `agent.py` runs the session as a
-LangGraph loop with one fresh model call per task, and nothing reaches the cluster without a
-person's approval. Two workers give network faults a real network to slow, and monitoring sits on
-the steady node, so a fault never blinds the kill switch.
+**A hybrid agent:**
+- Code builds each model's context and checks its answer. Models only rank, hypothesise and explain.
+- `agent.py` is a LangGraph loop, with one fresh model call per task.
+- Nothing reaches the cluster without a person's approval.
+- Two worker nodes give network faults a real network to slow. Monitoring lives on the steady node, so a fault can't blind the kill switch.
 
-### What each model reads, and what code checks after
+### What each model reads
 
-| Model | Reads (packed by code) | Writes | Code checks after |
+| Model | Reads | Writes | Code checks |
 |---|---|---|---|
-| **Planner** (the orchestrator), `gpt-oss-120b` | each fault in the pool: what it does, its strength, its target with the target's callers and risk flags from the map. Also the code-checked pairs, the run budget and the service facts. In a live session it also sees each fault's earlier rating. | the run order, with a hypothesis, a predicted tier and a reason for each | invented ids are dropped; faults it leaves out are added, mildest first; a person approves each run |
-| **Analyst**, one per run, `gpt-oss-20b` | the fault and its target, the hypothesis, the **measured** tier, the broken SLOs, how long the damage lasted, every effect `bank.py` measured, the service facts | what happened, why, whether the hypothesis held, one follow-up | the measured tier stands; only real files can be cited; the evidence check scores the note; at most 2 follow-ups, never a broad fault |
-| **Fixer**, one per root cause, `120b` if a finding is high, else `20b` | the findings that share the cause, the analyst's why, [`docs/fix-catalog.md`](docs/fix-catalog.md), the service facts | one fix, the change, the fault that proves it | the proving fault must exist; with no model, the catalog's row is used |
-| **Summary**, `gpt-oss-120b` | the ranking, the fixes, the resilience score, the planner's hit rate | 3 to 5 sentences, next tests | the order and every number come from `judge.py`; next tests must be known faults |
+| **Planner** `gpt-oss-120b` | pool faults, their strength and map facts; allowed pairs; budget | run order, hypothesis, predicted tier | invented ids dropped; you approve each run |
+| **Analyst** `gpt-oss-20b` | the **measured** tier, broken SLOs, effects | what broke, why, a follow-up | measured tier stands; evidence check; ≤ 2 follow-ups |
+| **Fixer** `20b` / `120b` | findings sharing one root cause; fix catalog | one fix, and the fault that proves it | the proving fault must exist |
+| **Summary** `gpt-oss-120b` | ranking, fixes, score | 3 to 5 sentences | every number comes from `judge.py` |
 
-The service facts are [`docs/service-facts.md`](docs/service-facts.md): what each service does and in what order,
-read from the shop's source. Models run on Groq (`gpt-oss-120b` on key 1, `gpt-oss-20b` on keys 2 and 3),
-with OpenRouter's `nemotron` as the last fallback. With no keys at all, rules do everything and
-each text is marked "(no AI)". Keys: [step 1 of Run it](#1-replay-on-any-laptop-linux-macos-or-windows).
+- Every model also reads [`docs/service-facts.md`](docs/service-facts.md), which we wrote from the shop's source.
+- Models run on Groq: `gpt-oss-120b` on key 1, `gpt-oss-20b` on keys 2 and 3. OpenRouter's `nemotron` is the last fallback.
+- With no keys at all, rules do everything and every text is marked "(no AI)". See [Run it](#1-replay-on-any-laptop-linux-macos-or-windows).
 
-### The dependency map, from the shop's own traces
+### The dependency map
 
-We add no tracing of our own: the shop already sends OpenTelemetry traces to Jaeger.
-`depmap.py` builds the map from:
+`depmap.py` builds the map from what the shop already has, with no tracing of our own:
+- **Jaeger traces** (`/api/dependencies`): who calls whom, and how often.
+- **kubectl config:** links to data stores, which send no traces, come from env vars. Risk flags: `no-persistence` (a restart loses data) and `hub` (3+ callers).
+- **The official diagram** as a check: 35 of its 36 links found, plus 10 it misses.
 
-- **Jaeger** (`/api/dependencies`, the last 15 minutes): who calls whom, and how often.
-- **kubectl** (`get deploy,statefulset`): data stores (Valkey, Kafka, Postgres) send no traces, so
-  their links come from each service's env vars. Ports, volumes and replicas give the risk flags:
-  `no-persistence` (a store with no volume: a restart loses its data) and `hub` (3 or more callers).
-- **The official diagram** ([`docs/official_edges.json`](docs/official_edges.json)) as a check: 35 of its 36
-  links found, plus 10 real ones it leaves out. Our monitoring is cut out of the map, so it's never a target.
-
-The map is used in three places:
-
-- **The planner's context:** each target's callers and risk flags.
-- **Pairs:** `judge.py` offers two faults as a pair only if they can meet: a shared caller within
-  two hops, a node fault, the entry point or a load spike. Independent pairs never reach a model.
-- **The console:** the map and the riskiest targets on its front page. Replay uses a recorded copy
-  (`refs/dependency-map.json`).
+It feeds:
+- the planner's context: each target's callers and risk flags
+- pairs: two faults are paired only if they can interact (a shared caller, a node fault, the entry point)
+- the console: the map and the riskiest targets
 
 ### How it's scored
 
-Two scores, never mixed. Every number comes from rules (`judge.py`), not from a model.
-[docs/scoring.md](docs/scoring.md) has each formula, why we chose it, and a worked example.
-
-- **Leverage** = impact ÷ fault strength ranks the findings. A small push that breaks a lot is the
-  weakest point: blast-loss, 10 % packet loss → checkout errors, is 3 ÷ 1 = 3.0.
-- **The resilience score** rates the system: krkn's formula over 7 SLOs a customer feels (15
-  points per fault), summed over the pool. Ranking by damage instead would reward the strongest
-  fault, krkn-ai's "break everything" trap.
-- **The evidence check** scores each analyst note against the measurement (−40 for each contradicted
-  claim). The **model's own estimate** is shown under it, marked unchecked.
+Two scores, never mixed, both computed by rules. Formulas, reasons and examples: [docs/scoring.md](docs/scoring.md).
+- **Leverage** = impact ÷ fault strength ranks the findings: blast-loss is 3 ÷ 1 = 3.0.
+- **Resilience score:** krkn's formula over 7 SLOs a customer feels, summed over the pool.
+- **Evidence check:** each analyst note is checked against the measurement. The model's own estimate is shown too, marked unchecked.
 
 ### Safety controls
 
-- **A person approves every run**, on a card in the console or in the terminal, and can skip or
-  reorder runs. Following Bosch's AI code of ethics, people make the final call.
-- **The kill switch** (`chaos.py`) checks the shop every second and stops krkn when a fault passes
-  its limits (`experiments.toml`): p95, error rate, another pod down (blast radius) or the time limit.
-  `touch runs/STOP`, Ctrl+C or **Emergency stop** end it at any time.
-- **Cleanup** removes krkn's containers and helper pods, and any network delay left on the node.
-- **One fault at a time** on the whole machine (a run lock).
-- **Guards in code:** one target per run; no namespace-wide faults and nothing on the steady node;
-  never two broad faults together; the controls never enter the pool.
-- **Calibration:** two of the shop's planted bugs are known-answer controls. paymentFailure must
-  rate high and adHighCpu low, or the measurement is broken, not the shop.
+- **A person approves every run.** Bosch's AI code of ethics says people make the final call.
+- **Kill switch:** p95, error rate, blast radius or the time limit, plus `runs/STOP`, Ctrl+C and Emergency stop.
+- **One fault at a time** (a run lock). Cleanup removes krkn's pods and any leftover network delay.
+- **Guards:** one target per run, nothing on the steady node, never two broad faults together, controls never in the pool.
+- **Calibration:** both known-answer controls must pass.
 
 ## What we found
 
 | Result | Evidence |
 |---|---|
-| The map found 35 of the 36 links in the official diagram, plus 10 it leaves out. The biggest single point of failure is the feature-flag service (flagd), with 13 services depending on it. | `uv run python depmap.py --check`, [docs/progress.md](docs/progress.md) |
-| Customers are charged, then lose the order: with shipping failing, 10 of 12 checkouts broke while all 14 card charges went through. Checkout charges before it ships and has no refund. | `bank.json`: `shipping-ship-errors` |
-| **Fix verified.** Killing the product catalog went from high to low after 2 replicas and a 10 s preStop, 3 runs of 3. | [evidence/catalog-kill-fix/](evidence/catalog-kill-fix/README.md) |
-| The kill switch stopped a 2,000 requests/s traffic spike 2.6 s after the first slow answer and cleaned up in 0.7 s. The shop was back to normal 1.9 s later. | [evidence/traffic-spike-runs.md](evidence/traffic-spike-runs.md) |
-| Two faults at once: blast-latency + catalog-kill rates medium, so the catalog fix holds on a slow network. | [evidence/combo-pair-blast-latency+catalog-kill/](evidence/combo-pair-blast-latency+catalog-kill/README.md) |
-| A live agent session ran 3 approved faults: findings ranked by leverage, a fix per root cause, resilience score 80/100. | [evidence/agent-live-session-1/report.md](evidence/agent-live-session-1/report.md) |
-| Both known-answer controls passed the same day (2026-10-10). | `uv run python bank.py show` |
+| Map: 35/36 official links, plus 10 more. flagd has 13 dependents. | `depmap.py --check` |
+| Charged with no order: 10 of 12 checkouts failed, 14 of 14 cards charged | `bank.json` · shipping-ship-errors |
+| **Fix verified:** catalog-kill went from high to low, 3 runs of 3 | [catalog-kill-fix](evidence/catalog-kill-fix/README.md) |
+| Kill switch: stopped 2.6 s after the breach, cleaned up 0.7 s later | [traffic-spike-runs](evidence/traffic-spike-runs.md) |
+| Pair: blast-latency + catalog-kill rates medium, so the fix holds | [combo-pair](evidence/combo-pair-blast-latency+catalog-kill/README.md) |
+| Agent session: ranked findings, fixes, score 80/100 | [report.md](evidence/agent-live-session-1/report.md) |
+| Both known-answer controls passed | `bank.py show` |
 
 ### The fault bank
 
 ![Which services each fault hurt: darker red is more damage](docs/bank-heatmap.png)
 
-Each fault is injected by krkn from outside the app and rated by measured damage, against the
-quiet minutes before it. **High:** customers hit errors or lose data, or the shop doesn't
-recover. **Medium:** another service errors, or the customer side is 2x slower. **Low:** anything less.
+Each fault is rated by measured damage, against the quiet minutes before it:
 
-- **High:** shipping-ship-errors, quote-garbage, currency-down, blast-loss, catalog-db-cutoff, cart-wipe
-- **Medium:** blast-latency, cpu-starve, recommendation-cutoff
-- **Low:** catalog-kill (high before the fix), payment-kill, kafka-outage, blast-memory
-- **Pairs:** blast-latency + catalog-kill medium; blast-latency + catalog-db-cutoff and cart-wipe + traffic-spike high
-- **Controls:** paymentFailure high ✓, adHighCpu low ✓
+| Tier | Means | Faults |
+|---|---|---|
+| **High** | customers hit errors or lose data, or the shop doesn't recover | shipping-ship-errors, quote-garbage, currency-down, blast-loss, catalog-db-cutoff, cart-wipe |
+| **Medium** | another service errors, or customers are 2x slower | blast-latency, cpu-starve, recommendation-cutoff |
+| **Low** | anything less | catalog-kill (after the fix), payment-kill, kafka-outage, blast-memory |
 
-`uv run python bank.py show` prints every effect behind each rating. The Live run page draws the
-same heatmap live.
+- **Pairs:** blast-latency + catalog-kill rates medium. blast-latency + catalog-db-cutoff and cart-wipe + traffic-spike rate high.
+- **Controls:** paymentFailure high ✓, adHighCpu low ✓.
+- **Every effect:** `uv run python bank.py show`.
 
 ## How we measure
 
-- **The shop:** 5 checks before give its normal speed (an unhealthy shop refuses the run), one a
-  second during gives the impact, and checks after until 5 in a row are normal give the recovery
-  time. Every check is in `runs/<id>/events.jsonl`; `summary.json` is computed from it.
-- **Every service:** `bank.py` compares each service's errors, p95 and throughput (from the traces
-  in Prometheus), plus CPU, memory, restarts and cart contents, with the quiet minutes before the fault.
+- **The shop:** 5 checks before (the baseline), one a second during (the impact), and checks after until 5 in a row are normal (the recovery). Each run is logged in `runs/<id>/events.jsonl`.
+- **Every service:** errors, p95 and throughput from Prometheus, plus CPU, memory, restarts and cart contents, against the minutes before the fault.
 
 ## Run it
 
