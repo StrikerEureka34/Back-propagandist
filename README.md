@@ -212,6 +212,12 @@ Each fault is rated by measured damage, against the quiet minutes before it:
 - **The shop:** 5 checks before (the baseline), one a second during (the impact), and checks after until 5 in a row are normal (the recovery). Each run is logged in `runs/<id>/events.jsonl`.
 - **Every service:** errors, p95 and throughput from Prometheus, plus CPU, memory, restarts and cart contents, against the minutes before the fault.
 
+**Live, while a fault runs.** The console's Live run page draws the same per-service check every 15 s:
+- Each service's last 3 minutes against its usual (5 to 15 minutes before), for errors, slowdown and lost traffic. Redder is worse.
+- Below, during a fault: six services run 23x to 96x slower than usual, while the rest stay clear.
+
+![Live run page: every service's errors, slowdown and traffic against usual, during a fault](refs/live_services.png)
+
 ## Run it
 
 There are two ways to run it:
